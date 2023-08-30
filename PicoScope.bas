@@ -1,19 +1,24 @@
 ' PicoScope - a simple oscilloscope on the RP2040-LCD-0.96
 ' Steve Johnson  August, 2023
 '
-' Test   Signal output on GP18 / Pin 24
-' Analog Signal input  on GP26 / Pin 31
+' Analog Signal input     on GP26 / Pin 31
+' Test   Signal output    on GP18 / Pin 24
+' 
+' Scope controls via momentary contact switches to ground
+'   Vertical Scale switch on GP13 / Pin 17
+'   Trigger Select switch on GP14 / Pin 19
+'   Time Scale     switch on GP15 / Pin 20
 '
 ' Scope Controls (via serial input from terminal emulator):
-'  Voltage: 0, 1, 2               to change vertical scale
-'  Time:    [F]aster, [S]lower    to change horizontal scale
-'  Trigger: [U]p, [D]own, [N]one  to change trigger criteria
+'   Voltage: [0], [1], [2]         to change vertical scale
+'   Time:    [F]aster, [S]lower    to change horizontal scale
+'   Trigger: [U]p, [D]own, [N]one  to change trigger criteria
 '
-' Many ideas were shared on the Back Shed Forum for this program.
-'   Sampling, Test Signal, Triggering, Framebuffers from stanleyella
-'   Math & Memory Copy from matherp
-'   Ganssle's switch debounce routine from CaptainBoing and Steve Johnson
-'   Graticules, Array Drawing, variable scales & triggering from Steve Johnson
+' Sampling, Test Signal, Triggering, Framebuffers from stanleyella
+' Math & Memory Copy from matherp
+' Ganssle's switch debounce routine from CaptainBoing and Steve Johnson
+' Graticules, Array Drawing, variable scales & triggering from Steve Johnson
+' Interrupt Service Routines from Steve Johnson
 
 Option EXPLICIT
 
@@ -22,21 +27,22 @@ Option EXPLICIT
 Const Hres       = MM.HRes        ' Horizontal screen resolution
 Const Vres       = MM.VRes        ' Vertical   screen resolution
 
-Const Major      = Vres/4
-Const Minor      = Major/4
+Const Major      = Vres/4         ' Major tic mark pixel spacing
+Const Minor      = Major/4        ' Minor tic mark pixel spacing
 
-Const PWM_Pin    = 24             ' GP18 for the PWM Test Signal
-Const ADC_Pin    = 31             ' GP26 for the analog input
-Const V_sw       =  1             ' GP0  for the Voltage Range  push-button switch
-Const T_sw       =  2             ' GP1  for the Trigger Select push-button switch
-Const A_sw       =  4             ' GP2  for the Time Scale     push-button switch
+Const PWM_Pin    = 24             ' GP18 - PWM Test signal output pin
+Const ADC_Pin    = 31             ' GP26 - Analog to Digital Converter input pin
 
-Const PWM_Freq   =   5000         ' Frequency for Test Signal on Pin 24
-Const PWM_Duty   =   49.0         ' Base duty cycle for test signal PWM in %
-Const PWM_Jitter =    2.0         ' Jitter in % for test signal PWM
-Const Debounce   =  &H3FF         ' Debounce delay for front panel switches
+Const V_sw       = 17             ' GP13  - Vertical Scale pushbutton switch
+Const T_sw       = 19             ' GP14  - Trigger Select pushbutton switch
+Const A_sw       = 20             ' GP15  - Time Scale     pushbutton switch
 
-' Generic to all displays
+Const PWM_Freq   = 5000           ' Frequency for Test Signal on Pin 24
+Const PWM_Duty   =   49           ' Base duty cycle for test signal PWM in %
+Const PWM_Jitter =    2           ' Jitter in % for test signal PWM
+Const Debounce   =  200           ' Debounce delay in mSec for front panel switches
+
+' Generic to all displays - calculations done off screen dimensions
 
 Const HMajor     = Hres/Major     ' How many Horiz Major Tic marks
 Const VMajor     = Vres/Major     ' How many Vert  Major Tic marks
@@ -53,14 +59,16 @@ Const Trig_None  = 0
 Const Trig_Down  = 1              ' Enumerate possible trigger conditions
 Const Trig_Up    = 2
 
-Const ADC_Max    = 7              ' Maximum index into ADC Time Scale array (0-7)
+Const ADC_Max    = 8              ' Maximum index into ADC Time Scale array (0-7)
 Const V_Max      = 3              ' Maximum index into Voltage  Scale array (0-3)
 Const Trig_Max   = 2
 
 ' Declare storage
 
-Dim INTEGER c, n, x, y, trigger, Vselect, Trig_Type, ADC_select
-Dim INTEGER v_btn, t_btn, a_btn   ' Counters to do switch debouncing
+Dim INTEGER c, n, x, y, trigger, trigger_timeout, Vselect, Trig_Type, ADC_select
+Dim INTEGER v_time, v_diff, v_state, v_old, v_press ' Volts   scale button debouncing and status
+Dim INTEGER t_time, t_diff, t_state, t_old, t_press ' Trigger type  button debouncing and status
+Dim INTEGER a_time, a_diff, a_state, a_old, a_press ' ADC frequency button debouncing and status
 
 Dim INTEGER Horizontal(Hres)      ' Horizontal coordinate buffer for fast graticule and buffer draw
 Dim FLOAT   sample(2*Hres)        ' Extra size to hopefully pick up a trigger event
@@ -78,6 +86,7 @@ Dim Float   H.Freq(10),  H.Seconds(10)
 Dim String  H.Units$(10), keypress$
 
 ' ========================== Initialization =================================
+Timer = 0
 Initialize_Arrays
 Initialize_Hardware
 Display_Instructions
@@ -86,21 +95,39 @@ Draw_Graticules
 ' ========================== Processing Loop ================================
 Do
   Randomize_Test_Signal
-  Timer = 0
+  trigger_timeout = Timer
   Do
     Handle_Keypresses
     Handle_Switches
     trigger = -1
     Get_Samples
     trigger = find_trigger(Trig_Type)
-    If Timer > 2500 Then Display_No_Trigger ' Waiting too long for a trigger.
+    If Timer-trigger_timeout > 2500 Then Display_No_Trigger ' Waiting too long for a trigger.
   Loop Until trigger >= 0
-  If Timer > 2500 Then Draw_Graticules      ' OK, we've got a trigger. Clear message.
+  If Timer-trigger_timeout > 2500 Then Draw_Graticules      ' OK, we've got a trigger. Clear message.
   Scale_Samples
   Update_Display
-'  Handle_Keypresses
-'  Handle_Switches
 Loop
+
+' ========================== Interrupt Service Routines ====================
+
+Sub V_ISR ' Interrupt Service Routine for Voltage SPST Button
+  If v_press = 0 Then ' Ignore further  button presses until handled in main loop
+    If (Timer - v_time) > debounce Then v_press = 1 : v_time = Timer
+  EndIf
+End Sub
+
+Sub T_ISR ' Interrupt Service Routine for Trigger SPST Button
+  If t_press = 0 Then ' Ignore further  button presses until handled in main loop
+    If (Timer - t_time) > debounce Then t_press = 1 : t_time = Timer
+  EndIf
+End Sub
+
+Sub A_ISR ' Interrupt Service Routine for ADC Frequency SPST Button
+  If a_press = 0 Then ' Ignore further  button presses until handled in main loop
+    If (Timer - a_time) > debounce Then a_press = 1 : a_time = Timer
+  EndIf
+End Sub
 
 ' ========================== Subs and Functions ============================
 
@@ -124,28 +151,25 @@ End Sub
 
 Sub Handle_Switches ' using Ganssel's debounce routine in Fruit of the Shed
   Local INTEGER V, T, A
-  v_btn = v_btn<<1 Xor Pin(V_sw) And Debounce
-  t_btn = t_btn<<1 Xor Pin(T_sw) And Debounce
-  a_btn = a_btn<<1 Xor Pin(A_sw) And Debounce
 
-  If v_btn = 0 Then
+  If v_press = 1 Then
+    v_press = 0
     Vselect = (Vselect+1) Mod (V_Max+1)
-    v_btn = Debounce
   EndIf
 
-  If t_btn = 0 Then
+  If t_press = 1 Then
+    t_press = 0
     Select Case Trig_Type
       Case Trig_Up:   Trig_Type = Trig_Down
       Case Trig_Down: Trig_Type = Trig_None
       Case Trig_None: Trig_Type = Trig_Up
       Case Else :     Trig_Type = Trig_Up
     End Select
-    t_btn = Debounce
   EndIf
 
-  If a_btn = 0 Then
+  If a_press = 1 Then
+    a_press = 0
     ADC_select = (ADC_select+1) Mod (ADC_Max+1) : Set_ADC_Timing
-    a_btn = Debounce
   EndIf
 
   Draw_Graticules
@@ -222,29 +246,30 @@ Sub Initialize_Arrays
 
   ' For Time,
 
-  H.Freq(0) =   2000 : H.Units(0)="mSec" : H.Seconds(0) = 10.0
-  H.Freq(1) =   4000 : H.Units(1)="mSec" : H.Seconds(1) = 5.0
-  H.Freq(2) =  10000 : H.Units(2)="mSec" : H.Seconds(2) = 2.0
-  H.Freq(3) =  20000 : H.Units(3)="mSec" : H.Seconds(3) = 1.0
-  H.Freq(4) =  40000 : H.Units(4)="uSec" : H.Seconds(4) = 500.0
-  H.Freq(5) = 100000 : H.Units(5)="uSec" : H.Seconds(5) = 200.0
-  H.Freq(6) = 200000 : H.Units(6)="uSec" : H.Seconds(6) = 100.0
-  H.Freq(7) = 400000 : H.Units(7)="uSec" : H.Seconds(7) = 50.0
+  H.Freq(0) =   1000 : H.Units(0)="mSec" : H.Seconds(0) = 20.0
+  H.Freq(1) =   2000 : H.Units(1)="mSec" : H.Seconds(1) = 10.0
+  H.Freq(2) =   4000 : H.Units(2)="mSec" : H.Seconds(2) = 5.0
+  H.Freq(3) =  10000 : H.Units(3)="mSec" : H.Seconds(3) = 2.0
+  H.Freq(4) =  20000 : H.Units(4)="mSec" : H.Seconds(4) = 1.0
+  H.Freq(5) =  40000 : H.Units(5)="uSec" : H.Seconds(5) = 500.0
+  H.Freq(6) = 100000 : H.Units(6)="uSec" : H.Seconds(6) = 200.0
+  H.Freq(7) = 200000 : H.Units(7)="uSec" : H.Seconds(7) = 100.0
+  H.Freq(8) = 400000 : H.Units(8)="uSec" : H.Seconds(8) = 50.0
 
-  ADC_select = 3              ' Se;ect from a number of time scales
+  ADC_select = 3              ' Select from a number of time scales
   Vselect    = 1              ' Select from a number of Scale factors and offsets for volts
   Trig_Type  = Trig_Down      ' Select from a number of trigger types
 
 End Sub
 
 Sub Initialize_Hardware
-  SetPin V_SW, DIN, PULLUP        ' Switch to cycle through Voltage scales
-  SetPin T_SW, DIN, PULLUP        ' Switch to cycle through Trigger types
-  SetPin A_SW, DIN, PULLUP        ' Switch to cycle through ADC Frequency (Time) scales
-  SetPin GP18, PWM1A              ' Set up pin 24 for PWM test signal output
-  PWM 1, PWM_Freq, PWM_Duty       ' Square wave on Pin 24
-  SetPin (31), AIn                ' ADC input on Pin 31
-  ADC open H.Freq(ADC_Select), 1  ' Sample at specified frequency
+  SetPin V_SW, INTL, V_ISR, PULLUP ' Switch to cycle through Voltage scales
+  SetPin T_SW, INTL, T_ISR, PULLUP ' Switch to cycle through Trigger types
+  SetPin A_SW, INTL, A_ISR, PULLUP ' Switch to cycle through ADC Frequency (Time) scales
+  SetPin GP18, PWM1A               ' Set up pin 24 for PWM test signal output
+  PWM 1, PWM_Freq, PWM_Duty        ' Square wave on Pin 24
+  SetPin (31), AIn                 ' ADC input on Pin 31
+  ADC open H.Freq(ADC_Select), 1   ' Sample at specified frequency
 
   FRAMEBUFFER CREATE F
   FRAMEBUFFER LAYER  L
