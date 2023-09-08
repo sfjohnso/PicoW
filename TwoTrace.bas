@@ -2,8 +2,8 @@
 ' Steve Johnson  September, 2023
 '
 ' Analog Signal input 1    on GP26 / Pin 31 - trace 1 / trigger
-' Analog Signal input 2    on GP27 / Pin 32 - trace 2
-' Test   Signal output    on GP18 / Pin 24
+' Analog Signal input 2    on GP27 / Pin 32 - trace 2 / trigger
+' Test   Signal output     on GP18 / Pin 24 - 1 KHz square wave
 '
 ' Scope controls via momentary contact switches to ground
 '   Vertical Scale switch on GP13 / Pin 17
@@ -22,6 +22,7 @@
 ' Interrupt Service Routines from Steve Johnson
 
 Option EXPLICIT
+Option Base 0
 
 ' Specifically For Waveshare RP2040-LCD-0.96
 
@@ -39,9 +40,9 @@ Const V_sw       = MM.Info(PINNO GP13) ' Pin 17 - Vertical Scale pushbutton swit
 Const T_sw       = MM.Info(PINNO GP14) ' Pin 19 - Trigger Select pushbutton switch
 Const A_sw       = MM.Info(PINNO GP15) ' Pin 20 - Time Scale     pushbutton switch
 
-Const PWM_Freq   = 5000           ' Frequency for Test Signal on Pin 24
-Const PWM_Duty   =   49           ' Base duty cycle for test signal PWM in %
-Const PWM_Jitter =    2           ' Jitter in % for test signal PWM
+Const PWM_Freq   = 1000           ' Frequency for Test Signal on Pin 24
+Const PWM_Duty   =   50           ' Base duty cycle for test signal PWM in %
+Const PWM_Jitter =    0           ' Jitter in % for test signal PWM
 Const Debounce   =  200           ' Debounce delay in mSec for front panel switches
 
 ' Generic to all displays - calculations done off screen dimensions
@@ -59,13 +60,17 @@ Const T2_color   = RGB(cyan)      ' Color for displayed Trace2
 Const TxtColor   = RGB(white)     ' Color for displayed text
 Const ShadColor  = RGB(black)     ' Color for text shadows
 
-Const Trig_None  = 0
-Const Trig_Down  = 1              ' Enumerate possible trigger conditions
-Const Trig_Up    = 2
+Const Trig_None_1  = 0
+Const Trig_Down_1  = 1              ' Enumerate possible trigger conditions for GP26
+Const Trig_Up_1    = 2
+Const Trig_None_2  = 3
+Const Trig_Down_2  = 4              ' Enumerate possible trigger conditions for GP27
+Const Trig_Up_2    = 5
+
 
 Const ADC_Max    = 7              ' Maximum index into ADC Time Scale array (0-7)
 Const V_Max      = 3              ' Maximum index into Voltage  Scale array (0-3)
-Const Trig_Max   = 2
+Const Trig_Max   = 5
 
 ' Declare storage
 
@@ -92,15 +97,16 @@ Dim Float   H.Freq(10),  H.Seconds(10)
 Dim String  H.Units$(10), keypress$
 
 ' ========================== Initialization =================================
-Timer = 0
 Initialize_Arrays
 Initialize_Hardware
 Display_Instructions
 Draw_Graticules
 
+Timer = 0
+
 ' ========================== Processing Loop ================================
+
 Do
-  Randomize_Test_Signal
   trigger_timeout = Timer
   Do
     Handle_Keypresses
@@ -155,73 +161,109 @@ Sub Handle_Keypresses
   Draw_Graticules
 End Sub
 
-Sub Handle_Switches ' using Ganssel's debounce routine in Fruit of the Shed
-  Local INTEGER V, T, A
-
+Sub Handle_Switches ' switch press detection done in Interrupt Service Routines
   If v_press = 1 Then
     v_press = 0
+    Print "Voltage: "; Str$(V.MajVolts(Vselect),3,3),"->",
     Vselect = (Vselect+1) Mod (V_Max+1)
+    Draw_Graticules
+    Print Str$(V.MajVolts(Vselect),3,3);" V/Div"
   EndIf
 
   If t_press = 1 Then
     t_press = 0
     Select Case Trig_Type
-      Case Trig_Up:   Trig_Type = Trig_Down
-      Case Trig_Down: Trig_Type = Trig_None
-      Case Trig_None: Trig_Type = Trig_Up
-      Case Else :     Trig_Type = Trig_Up
+      Case Trig_Up_1:   Print "Trigger:  "; " Trig_Up_1",   "->", " Trig_Down_1"
+      Case Trig_Down_1: Print "Trigger:  "; " Trig_Down_1", "->", " Trig_None_1"
+      Case Trig_None_1: Print "Trigger:  "; " Trig_None_1", "->", " Trig_Up_2"
+      Case Trig_Up_2:   Print "Trigger:  "; " Trig_Up_2",   "->", " Trig_Down_2"
+      Case Trig_Down_2: Print "Trigger:  "; " Trig_Down_2", "->", " Trig_None_2"
+      Case Trig_None_2: Print "Trigger:  "; " Trig_None_2", "->", " Trig_Up_1"
+      Case Else :       Print "Trigger:  "; " *Unknown*",   "->", " Trig_Up_1"
     End Select
+    Trig_Type = (Trig_Type+1) Mod (Trig_Max+1)
+    Draw_Graticules
   EndIf
 
   If a_press = 1 Then
     a_press = 0
+    Print "Timebase: "; Str$(H.seconds(ADC_select),3,3);" ";H.units(ADC_select), "->",
     ADC_select = (ADC_select+1) Mod (ADC_Max+1) : Set_ADC_Timing
+    Print Str$(H.seconds(ADC_select),3,3);" ";H.units(ADC_select); "/Div"
+    Draw_Graticules
   EndIf
-
-  Draw_Graticules
 
 End Sub
 
 Function find_trigger(a)
   Local median = Math(MEAN trace1())
+
   Select Case a
-    Case Trig_Down
+
+    Case Trig_Down_1
+      median = Math(MEAN trace1())
       For c = 0 To Hres-1
         If trace1(c) > median+0.1 And trace1(c+1) < median+0.2 Then find_trigger = c : Exit Function
       Next
-      find_trigger = -1 : Exit Function
-    Case Trig_Up
+      find_trigger = -1
+
+    Case Trig_Up_1
+      median = Math(MEAN trace1())
       For c = 0 To Hres-1
         If trace1(c+1) > median+0.1 And trace1(c) < median+0.2 Then find_trigger = c : Exit Function
       Next
-      find_trigger = -1 : Exit Function
+      find_trigger = -1
+
+    Case Trig_Down_2
+      median = Math(MEAN trace2())
+      For c = 0 To Hres-1
+        If trace2(c) > median+0.1 And trace2(c+1) < median+0.2 Then find_trigger = c : Exit Function
+      Next
+      find_trigger = -1
+
+    Case Trig_Up_2
+      median = Math(MEAN trace2())
+      For c = 0 To Hres-1
+        If trace2(c+1) > median+0.1 And trace2(c) < median+0.2 Then find_trigger = c : Exit Function
+      Next
+      find_trigger = -1
+
     Case Else
-      find_trigger = 0 : Exit Function
+      find_trigger = 0
+
   End Select
 End Function
 
 Sub Display_Instructions
-  Local i, j
   FRAMEBUFFER WRITE L
   CLS Background
   Text   6, Vres/2, "Pico", CMV, 1, 1, T1_Color, Background
   Text   Hres-6, Vres/2, "Scope", CMV, 1, 1, T2_Color, Background
-  Text   18,  3,     "Keyboard:", LT, 7, 1, TxtColor, Background
-  Text   25, 15,     "Volt: 0, 1, 2, 3", LT, 7, 1, TxtColor, Background
+  Text   18,  3,     "Keyboard:",            LT, 7, 1, TxtColor, Background
+  Text   25, 15,     "Volt: 0, 1, 2, 3",     LT, 7, 1, TxtColor, Background
   Text   25, 27,     "Time: Faster, Slower", LT, 7, 1, TxtColor, Background
-  Text   25, 39,     "Trig: Up, Dn, None", LT, 7, 1, TxtColor, Background
-  Text   25, 51,     "Pin 24: Test Signal", LT, 7, 1, TxtColor, Background
+  Text   25, 39,     "Trig: Up, Dn, None",   LT, 7, 1, TxtColor, Background
+  Text   18, 51,     "Pin 24: Test Signal",  LT, 7, 1, TxtColor, Background
+  Text   18, 63,     "Pins 31,32: Inputs",   LT, 7, 1, TxtColor, Background
   FRAMEBUFFER COPY L, F
   FRAMEBUFFER COPY F,N
   Pause 4000
-  Text   20, 79,     "Waiting for Trigger.....", LB, 7, 1, T1_Color, Background
+
+  Select Case Trig_Type
+    Case Trig_Up_1, Trig_Down_1, Trig_None_1: Text 20, 79, "Waiting for Trigger, Ch 1", LB, 7, 1, T1_Color, Background
+    Case Trig_Up_2, Trig_Down_2, Trig_None_2: Text 20, 79, "Waiting for Trigger, Ch 2", LB, 7, 1, T2_Color, Background
+  End Select
+
   FRAMEBUFFER COPY L, F
   FRAMEBUFFER COPY F,N
 End Sub
 
 Sub Display_No_Trigger
   FRAMEBUFFER WRITE L
-  Text Hres/2, Vres/2, "Waiting for Trigger.....", CM, 7, 1, T1_Color, Background
+  Select Case Trig_Type
+    Case Trig_Up_1, Trig_Down_1, Trig_None_1: Text Hres/2, Vres/2, "Waiting for Trigger, Ch 1", CM, 7, 1, T1_Color, Background
+    Case Trig_Up_2, Trig_Down_2, Trig_None_2: Text Hres/2, Vres/2, "Waiting for Trigger, Ch 2", CM, 7, 1, T2_Color, Background
+  End Select
   FRAMEBUFFER COPY L, F
   FRAMEBUFFER COPY F,N
 End Sub
@@ -264,11 +306,11 @@ Sub Initialize_Arrays
   H.Freq(5) =  40000 : H.Units(5)="uSec" : H.Seconds(5) = 500.0
   H.Freq(6) = 100000 : H.Units(6)="uSec" : H.Seconds(6) = 200.0
   H.Freq(7) = 200000 : H.Units(7)="uSec" : H.Seconds(7) = 100.0
-'  H.Freq(8) = 400000 : H.Units(8)="uSec" : H.Seconds(8) = 50.0 - too fast for 2 channels
+' H.Freq(8) = 400000 : H.Units(8)="uSec" : H.Seconds(8) = 50.0 - too fast for 2 channels
 
-  ADC_select = 3              ' Select from a number of time scales
-  Vselect    = 1              ' Select from a number of Scale factors and offsets for volts
-  Trig_Type  = Trig_Down      ' Select from a number of trigger types
+  ADC_select = 7              ' Select from a number of time scales
+  Vselect    = 2              ' Select from a number of Scale factors and offsets for volts
+  Trig_Type  = Trig_Down_1    ' Select from a number of trigger types
 
 End Sub
 
@@ -278,8 +320,8 @@ Sub Initialize_Hardware
   SetPin A_SW, INTL, A_ISR, PULLUP ' Switch to cycle through ADC Frequency (Time) scales
   SetPin GP18, PWM1A               ' Set up pin 24 for PWM test signal output
   PWM 1, PWM_Freq, PWM_Duty        ' Square wave on Pin 24
-  SetPin ADC1_Pin, AIn             ' ADC input on Pin 31
-  SetPin ADC2_Pin, AIn
+  SetPin ADC1_Pin, AIn             ' ADC input on Pin 31 "Channel 1"
+  SetPin ADC2_Pin, AIn             ' ADC input on Pin 32 "Channel 2"
   ADC open H.Freq(ADC_Select), 2   ' Sample at specified frequency
 
   FRAMEBUFFER CREATE F
@@ -304,12 +346,14 @@ Sub Draw_Graticules
   V$ = Str$(V.MajVolts(Vselect), 2, 2)+" V"
   Text Hres, Vres, V$, RB, 7, 1, TxtColor, Background     ' Draw Volts Scale at Lower Right
   Select Case Trig_Type
-    Case Trig_Up:   T$ = "/"
-    Case Trig_Down: T$ = "\"
-    Case Trig_None: T$ = "-"
-    Case Else :     T$ = " "
+    Case Trig_Up_1:   Text Hres/2, Vres, "/", CB, 7, 1, T1_Color, Background
+    Case Trig_Down_1: Text Hres/2, Vres, "\", CB, 7, 1, T1_Color, Background
+    Case Trig_None_1: Text Hres/2, Vres, "-", CB, 7, 1, T1_Color, Background
+    Case Trig_Up_2:   Text Hres/2, Vres, "/", CB, 7, 1, T2_Color, Background
+    Case Trig_Down_2: Text Hres/2, Vres, "\", CB, 7, 1, T2_Color, Background
+    Case Trig_None_2: Text Hres/2, Vres, "-", CB, 7, 1, T2_Color, Background
+    Case Else :       Text Hres/2, Vres, " ", CB, 7, 1, T1_Color, Background
   End Select
-  Text Hres/2, Vres, T$, CB, 7, 1, TxtColor, Background    ' Draw Trigger at Lower Middle
 End Sub
 
 Sub Randomize_Test_Signal
