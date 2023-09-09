@@ -150,9 +150,9 @@ Sub Handle_Keypresses
     Case "1"      : Vselect = 1
     Case "2"      : Vselect = 2
     Case "3"      : Vselect = 3
-    Case "u", "U" : Trig_Type  = Trig_Up
-    Case "d", "D" : Trig_Type  = Trig_Down
-    Case "n", "N" : Trig_Type  = Trig_None
+    Case "u", "U" : Trig_Type  = Trig_Up_1
+    Case "d", "D" : Trig_Type  = Trig_Down_1
+    Case "n", "N" : Trig_Type  = Trig_None_1
     Case "f", "F" : ADC_select = Min(ADC_select+1, ADC_Max) : Set_ADC_Timing
     Case "s", "S" : ADC_select = Max(ADC_select-1, 0) : Set_ADC_Timing
     Case "" : Exit Sub               ' No key pressed. No change.
