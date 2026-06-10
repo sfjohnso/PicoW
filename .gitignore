@@ -1,0 +1,33 @@
+# =====================================================================
+#  Protective .gitignore
+#
+#  This Git repository's root is the user's HOME directory
+#  (C:\Users\Steve).  To prevent accidentally committing personal data,
+#  secrets, registry hives, browser profiles, etc., we IGNORE EVERYTHING
+#  by default and then explicitly UN-IGNORE only the project files.
+#
+#  To track a new file, add a matching "!path" line below.
+# =====================================================================
+
+# Ignore everything, at every directory level.
+*
+
+# --- always keep these ---
+!.gitignore
+!README.md
+
+# --- MMBasic / PicoW program sources (repo root) ---
+!AnalogClock.bas
+!LCD_Life.bas
+!PicoScope.bas
+!TwoTrace.bas
+!PicoWClockDST.bas
+!PicoWeather.bas
+
+# --- serial tooling (allow the folder, then only these scripts) ---
+!tools/
+!tools/xmodem_send.py
+!tools/xmodem_recv.py
+!tools/serial_script.py
+!tools/start_program.py
+!tools/validate_run.py
