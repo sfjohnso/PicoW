@@ -131,8 +131,10 @@ def render_html():
  .card{width:min(92vw,460px);background:#121826cc;border:1px solid #28324a;
   border-radius:20px;padding:28px 30px;box-shadow:0 18px 50px #0008;backdrop-filter:blur(6px)}
  .loc{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:#8aa0c6}
- #clock{font-size:54px;font-weight:700;letter-spacing:.02em;margin:6px 0 2px;
-  font-variant-numeric:tabular-nums}
+ #clock{font-weight:700;letter-spacing:.02em;margin:6px 0 2px;white-space:nowrap;
+  line-height:1.05;font-variant-numeric:tabular-nums;font-size:clamp(30px,13vw,72px)}
+ #ticktime{display:inline-block}
+ .ap{font-size:.6em;font-weight:600;color:#aebbd6;margin-left:.04em}
  #date{color:#aebbd6;font-size:16px;margin-bottom:20px}
  .tz{font-size:14px;color:#7f8db0}
  .wx{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
@@ -144,7 +146,7 @@ def render_html():
  footer{margin-top:20px;font-size:12px;color:#66749a;text-align:center;line-height:1.6}
 </style></head><body><div class="card">
  <div class="loc">Newbury Park, CA &middot; 91320</div>
- <div id="clock">%d:%02d:%02d %s</div>
+ <div id="clock"><span id="ticktime">%d:%02d:%02d<span class="ap"> %s</span></span></div>
  <div id="date">%s, %s %d, %d</div>
  <div class="tz">%s</div>
  <div class="wx">
@@ -162,13 +164,25 @@ def render_html():
  var D=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
  var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
  function p(n){return (n<10?"0":"")+n;}
+ function fmt(H,Mi,S){var ap=H<12?"AM":"PM",h=H%%12;if(h==0)h=12;
+   return h+":"+p(Mi)+":"+p(S)+'<span class="ap"> '+ap+'</span>';}
+ var box=document.getElementById("clock"),inner=document.getElementById("ticktime");
+ function fitClock(){                       // size widest time (12:55:55 PM) to fit width
+   var avail=box.clientWidth,save=inner.innerHTML;
+   inner.innerHTML=fmt(12,55,55);
+   box.style.fontSize="100px";
+   var w=inner.getBoundingClientRect().width;
+   box.style.fontSize=(100*avail/w*0.97)+"px";
+   inner.innerHTML=save;
+ }
  function tick(){
-   var H=t.getHours(),ap=H<12?"AM":"PM",h12=H%%12;if(h12==0)h12=12;
-   document.getElementById("clock").textContent=h12+":"+p(t.getMinutes())+":"+p(t.getSeconds())+" "+ap;
+   inner.innerHTML=fmt(t.getHours(),t.getMinutes(),t.getSeconds());
    document.getElementById("date").textContent=D[t.getDay()]+", "+M[t.getMonth()]+" "+t.getDate()+", "+t.getFullYear();
    t=new Date(t.getTime()+1000);
  }
- tick(); setInterval(tick,1000);
+ tick(); fitClock(); setInterval(tick,1000);
+ window.addEventListener("resize",fitClock);
+ window.addEventListener("orientationchange",fitClock);
  // Reload to refresh weather every 5 minutes.
  setTimeout(function(){location.reload();},300000);
 </script></body></html>""" % (
