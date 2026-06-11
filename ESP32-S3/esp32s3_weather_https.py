@@ -135,6 +135,16 @@ def render_html():
   line-height:1.05;font-variant-numeric:tabular-nums;font-size:clamp(30px,13vw,72px)}
  #ticktime{display:inline-block}
  .ap{font-size:.6em;font-weight:600;color:#aebbd6;margin-left:.04em}
+ #face{width:min(62vw,250px);height:auto;display:block;margin:4px auto 10px}
+ .dial{fill:#0e1422;stroke:#28324a;stroke-width:1.5}
+ #ticks line{stroke:#5b6b8c;stroke-width:.6}
+ #ticks line.maj{stroke:#aebbd6;stroke-width:1.4}
+ #nums text{fill:#cfe0ff;font-size:7px;font-weight:600;text-anchor:middle;dominant-baseline:central}
+ .hand{stroke-linecap:round}
+ .hour{stroke:#e8edf6;stroke-width:3}
+ .min{stroke:#e8edf6;stroke-width:2}
+ .sec{stroke:#ff6b6b;stroke-width:1}
+ .hub{fill:#ff6b6b}
  #date{color:#aebbd6;font-size:16px;margin-bottom:20px}
  .tz{font-size:14px;color:#7f8db0}
  .wx{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
@@ -146,6 +156,14 @@ def render_html():
  footer{margin-top:20px;font-size:12px;color:#66749a;text-align:center;line-height:1.6}
 </style></head><body><div class="card">
  <div class="loc">Newbury Park, CA &middot; 91320</div>
+ <svg id="face" viewBox="0 0 100 100" aria-label="analog clock">
+  <circle cx="50" cy="50" r="48" class="dial"/>
+  <g id="ticks"></g><g id="nums"></g>
+  <line id="hh" x1="50" y1="50" x2="50" y2="29" class="hand hour"/>
+  <line id="mh" x1="50" y1="50" x2="50" y2="19" class="hand min"/>
+  <line id="sh" x1="50" y1="50" x2="50" y2="15" class="hand sec"/>
+  <circle cx="50" cy="50" r="2.4" class="hub"/>
+ </svg>
  <div id="clock"><span id="ticktime">%d:%02d:%02d<span class="ap"> %s</span></span></div>
  <div id="date">%s, %s %d, %d</div>
  <div class="tz">%s</div>
@@ -175,12 +193,35 @@ def render_html():
    box.style.fontSize=(100*avail/w*0.97)+"px";
    inner.innerHTML=save;
  }
+ function buildFace(){                      // draw 60 ticks + 12 numerals once
+   var tk=document.getElementById("ticks"),nm=document.getElementById("nums"),
+       ns="http://www.w3.org/2000/svg",i,a,r2,ln,tx;
+   for(i=0;i<60;i++){a=i*6*Math.PI/180;var maj=(i%%5==0);r2=maj?40:43.5;
+     ln=document.createElementNS(ns,"line");
+     ln.setAttribute("x1",(50+46*Math.sin(a)).toFixed(2));
+     ln.setAttribute("y1",(50-46*Math.cos(a)).toFixed(2));
+     ln.setAttribute("x2",(50+r2*Math.sin(a)).toFixed(2));
+     ln.setAttribute("y2",(50-r2*Math.cos(a)).toFixed(2));
+     if(maj)ln.setAttribute("class","maj");tk.appendChild(ln);}
+   for(i=1;i<=12;i++){a=i*30*Math.PI/180;
+     tx=document.createElementNS(ns,"text");
+     tx.setAttribute("x",(50+37*Math.sin(a)).toFixed(2));
+     tx.setAttribute("y",(50-37*Math.cos(a)).toFixed(2));
+     tx.textContent=i;nm.appendChild(tx);}
+ }
+ function setHands(){                       // rotate hands to current time
+   var s=t.getSeconds(),m=t.getMinutes(),h=t.getHours()%%12;
+   document.getElementById("sh").setAttribute("transform","rotate("+(s*6)+" 50 50)");
+   document.getElementById("mh").setAttribute("transform","rotate("+(m*6+s*0.1)+" 50 50)");
+   document.getElementById("hh").setAttribute("transform","rotate("+(h*30+m*0.5)+" 50 50)");
+ }
  function tick(){
    inner.innerHTML=fmt(t.getHours(),t.getMinutes(),t.getSeconds());
    document.getElementById("date").textContent=D[t.getDay()]+", "+M[t.getMonth()]+" "+t.getDate()+", "+t.getFullYear();
+   setHands();
    t=new Date(t.getTime()+1000);
  }
- tick(); fitClock(); setInterval(tick,1000);
+ buildFace(); tick(); fitClock(); setInterval(tick,1000);
  window.addEventListener("resize",fitClock);
  window.addEventListener("orientationchange",fitClock);
  // Reload to refresh weather every 5 minutes.
