@@ -196,7 +196,7 @@ def render_html():
  function buildFace(){                      // draw 60 ticks + 12 numerals once
    var tk=document.getElementById("ticks"),nm=document.getElementById("nums"),
        ns="http://www.w3.org/2000/svg",i,a,r2,ln,tx;
-   for(i=0;i<60;i++){a=i*6*Math.PI/180;var maj=(i%%5==0);r2=maj?40:43.5;
+   for(i=0;i<60;i++){a=i*6*Math.PI/180;var maj=(i%%5==0);r2=maj?41.2:43.5;
      ln=document.createElementNS(ns,"line");
      ln.setAttribute("x1",(50+46*Math.sin(a)).toFixed(2));
      ln.setAttribute("y1",(50-46*Math.cos(a)).toFixed(2));
