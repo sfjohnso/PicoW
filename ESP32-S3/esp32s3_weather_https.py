@@ -104,6 +104,8 @@ def render_html():
     lt = time.localtime(time.time() + tz_offset)
     yr, mo, dy, hh, mm, ss, wd, _ = lt
     abbr = "PDT" if tz_offset == -7 * 3600 else "PST"
+    ampm = "AM" if hh < 12 else "PM"        # 12-hour display (hh stays 24h for JS Date seed)
+    h12  = hh % 12 or 12
     age = (time.time() - wx_stamp) if wx else 0
 
     if wx:
@@ -142,7 +144,7 @@ def render_html():
  footer{margin-top:20px;font-size:12px;color:#66749a;text-align:center;line-height:1.6}
 </style></head><body><div class="card">
  <div class="loc">Newbury Park, CA &middot; 91320</div>
- <div id="clock">%02d:%02d:%02d</div>
+ <div id="clock">%d:%02d:%02d %s</div>
  <div id="date">%s, %s %d, %d</div>
  <div class="tz">%s</div>
  <div class="wx">
@@ -161,7 +163,8 @@ def render_html():
  var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
  function p(n){return (n<10?"0":"")+n;}
  function tick(){
-   document.getElementById("clock").textContent=p(t.getHours())+":"+p(t.getMinutes())+":"+p(t.getSeconds());
+   var H=t.getHours(),ap=H<12?"AM":"PM",h12=H%%12;if(h12==0)h12=12;
+   document.getElementById("clock").textContent=h12+":"+p(t.getMinutes())+":"+p(t.getSeconds())+" "+ap;
    document.getElementById("date").textContent=D[t.getDay()]+", "+M[t.getMonth()]+" "+t.getDate()+", "+t.getFullYear();
    t=new Date(t.getTime()+1000);
  }
@@ -169,7 +172,7 @@ def render_html():
  // Reload to refresh weather every 5 minutes.
  setTimeout(function(){location.reload();},300000);
 </script></body></html>""" % (
-        hh, mm, ss, WDAY[wd], MON[mo], dy, yr, abbr,
+        h12, mm, ss, ampm, WDAY[wd], MON[mo], dy, yr, abbr,
         cond, temp, feels, hum, wind,
         daynight, age, ip_addr,
         yr, mo - 1, dy, hh, mm, ss)
