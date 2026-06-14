@@ -178,7 +178,9 @@ def render_html():
 </div>
 <script>
  // Live client-side clock seeded from the server's local time.
- var t=new Date(%d,%d,%d,%d,%d,%d);
+ var base=new Date(%d,%d,%d,%d,%d,%d).getTime();   // server local time, ms
+ var clk=(window.performance&&performance.now)?performance.now.bind(performance):Date.now;
+ var t0=clk(),lastSec=-1;
  var D=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
  var M=["January","February","March","April","May","June","July","August","September","October","November","December"];
  function p(n){return (n<10?"0":"")+n;}
@@ -209,19 +211,20 @@ def render_html():
      tx.setAttribute("y",(50-37*Math.cos(a)).toFixed(2));
      tx.textContent=i;nm.appendChild(tx);}
  }
- function setHands(){                       // rotate hands to current time
-   var s=t.getSeconds(),m=t.getMinutes(),h=t.getHours()%%12;
-   document.getElementById("sh").setAttribute("transform","rotate("+(s*6)+" 50 50)");
-   document.getElementById("mh").setAttribute("transform","rotate("+(m*6+s*0.1)+" 50 50)");
-   document.getElementById("hh").setAttribute("transform","rotate("+(h*30+m*0.5)+" 50 50)");
+ var sh=document.getElementById("sh"),mh=document.getElementById("mh"),hh=document.getElementById("hh");
+ function frame(){                          // 10 Hz: sweep second hand, creep min/hour
+   var d=new Date(base+(clk()-t0));
+   var sf=d.getSeconds()+d.getMilliseconds()/1000,m=d.getMinutes(),h=d.getHours()%%12;
+   sh.setAttribute("transform","rotate("+(sf*6).toFixed(2)+" 50 50)");
+   mh.setAttribute("transform","rotate("+(m*6+sf*0.1).toFixed(2)+" 50 50)");
+   hh.setAttribute("transform","rotate("+(h*30+m*0.5).toFixed(2)+" 50 50)");
+   var s=d.getSeconds();                    // digital + date refresh once per whole second
+   if(s!==lastSec){lastSec=s;
+     inner.innerHTML=fmt(d.getHours(),m,s);
+     document.getElementById("date").textContent=D[d.getDay()]+", "+M[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
+   }
  }
- function tick(){
-   inner.innerHTML=fmt(t.getHours(),t.getMinutes(),t.getSeconds());
-   document.getElementById("date").textContent=D[t.getDay()]+", "+M[t.getMonth()]+" "+t.getDate()+", "+t.getFullYear();
-   setHands();
-   t=new Date(t.getTime()+1000);
- }
- buildFace(); tick(); fitClock(); setInterval(tick,1000);
+ buildFace(); frame(); fitClock(); setInterval(frame,100);
  window.addEventListener("resize",fitClock);
  window.addEventListener("orientationchange",fitClock);
  // Reload to refresh weather every 5 minutes.
