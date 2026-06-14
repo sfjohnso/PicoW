@@ -212,7 +212,7 @@ def render_html():
      tx.textContent=i;nm.appendChild(tx);}
  }
  var sh=document.getElementById("sh"),mh=document.getElementById("mh"),hh=document.getElementById("hh");
- function frame(){                          // 10 Hz: sweep second hand, creep min/hour
+ function frame(){                          // rAF (~60fps): continuous second-hand sweep
    var d=new Date(base+(clk()-t0));
    var sf=d.getSeconds()+d.getMilliseconds()/1000,m=d.getMinutes(),h=d.getHours()%%12;
    sh.setAttribute("transform","rotate("+(sf*6).toFixed(2)+" 50 50)");
@@ -223,8 +223,9 @@ def render_html():
      inner.innerHTML=fmt(d.getHours(),m,s);
      document.getElementById("date").textContent=D[d.getDay()]+", "+M[d.getMonth()]+" "+d.getDate()+", "+d.getFullYear();
    }
+   requestAnimationFrame(frame);
  }
- buildFace(); frame(); fitClock(); setInterval(frame,100);
+ buildFace(); fitClock(); frame();
  window.addEventListener("resize",fitClock);
  window.addEventListener("orientationchange",fitClock);
  // Reload to refresh weather every 5 minutes.
