@@ -10,7 +10,7 @@
 # Port note: in the bootloader the board is COM8 / PID 1001 (esptool); while
 # MicroPython runs it is COM11 / PID 4001 (mpremote / REPL).
 # ---------------------------------------------------------------------------
-import sys, time, gc, network, ntptime, requests, socket, tls
+import sys, time, gc, network, ntptime, requests, socket, tls, _thread
 
 # --- configuration ---------------------------------------------------------
 try:
@@ -24,7 +24,8 @@ PORT     = 443
 
 # Optional static IP so the URL never changes.  Leave STATIC_IP = None to use
 # DHCP.  If you set one, also add a DHCP reservation on the router to be safe.
-STATIC_IP = None                         # e.g. ("192.168.0.157","255.255.255.0","192.168.0.1","192.168.0.1")
+STATIC_IP = None                         # use DHCP; pin the URL via a router reservation
+                                         # for MAC f0:9e:9e:74:c9:b4 instead (more robust)
 
 WEATHER_EVERY = 1800                     # refresh weather every 30 min
 NTP_EVERY     = 6 * 3600                 # re-sync clock every 6 hours
@@ -48,14 +49,21 @@ wx = None
 wx_stamp = 0
 ip_addr = "0.0.0.0"
 
+# --- concurrency: bounded thread-pool dispatch (Option A) ------------------
+# Each accepted connection (TLS handshake + render + write) is handed to a
+# worker thread, capped so we never exhaust RAM with concurrent TLS sessions.
+# Total simultaneous connections = MAX_WORKERS (threads) + 1 (inline accept
+# thread).  Start small; raise MAX_WORKERS only if gc.mem_free() has headroom.
+MAX_WORKERS  = 1
+WORKER_STACK = 16 * 1024         # TLS handshake needs more than the default stack
+_worker_lock = _thread.allocate_lock()
+_active      = 0                 # live worker threads
+
 
 def connect_wifi():
     global ip_addr
     w = network.WLAN(network.STA_IF)
     w.active(True)
-    if STATIC_IP and not w.isconnected():
-        try: w.ifconfig(STATIC_IP)
-        except Exception as e: print("static ip set failed:", e)
     if not w.isconnected():
         print("Connecting to %s ..." % SSID)
         w.connect(SSID, PASSWORD)
@@ -63,6 +71,9 @@ def connect_wifi():
             if w.isconnected(): break
             time.sleep(0.5)
     if w.isconnected():
+        if STATIC_IP:                    # apply AFTER connect so DHCP can't clobber it
+            try: w.ifconfig(STATIC_IP)
+            except Exception as e: print("static ip set failed:", e)
         ip_addr = w.ifconfig()[0]
         print("WiFi OK:", ip_addr)
         return True
@@ -287,15 +298,28 @@ def handle(cl, raddr, ctx):
         gc.collect()
 
 
+def _worker(cl, raddr, ctx):
+    # Runs one connection on its own thread, then frees its pool slot.
+    global _active
+    try:
+        handle(cl, raddr, ctx)
+    finally:
+        _worker_lock.acquire()
+        _active -= 1
+        _worker_lock.release()
+
+
 def serve():
+    global _active
     ctx = make_server_ctx()
     addr = socket.getaddrinfo("0.0.0.0", PORT)[0][-1]
     s = socket.socket()
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     s.bind(addr)
-    s.listen(2)
+    s.listen(4)                          # queue extra connections while workers busy
     s.settimeout(15)                     # so we can run maintenance between hits
-    print("HTTPS server up:  https://%s/" % ip_addr)
+    _thread.stack_size(WORKER_STACK)     # applies to threads spawned hereafter
+    print("HTTPS server up:  https://%s/  (MAX_WORKERS=%d)" % (ip_addr, MAX_WORKERS))
 
     state = {"ntp": time.time()}
     while True:
@@ -305,7 +329,22 @@ def serve():
                 cl, raddr = s.accept()
             except OSError:
                 continue                 # accept timeout -> loop for maintenance
-            handle(cl, raddr, ctx)
+            print("conn", raddr[0], "active", _active, "mem", gc.mem_free())
+            spawn = False
+            _worker_lock.acquire()
+            if _active < MAX_WORKERS:
+                _active += 1
+                spawn = True
+            _worker_lock.release()
+            if spawn:
+                try:
+                    _thread.start_new_thread(_worker, (cl, raddr, ctx))
+                except Exception as e:
+                    _worker_lock.acquire(); _active -= 1; _worker_lock.release()
+                    print("spawn failed:", e)
+                    handle(cl, raddr, ctx)       # fall back to inline
+            else:
+                handle(cl, raddr, ctx)           # at cap -> serve inline
         except Exception as e:
             print("loop error:", e)      # never let the listen socket get rebound
             time.sleep(1)
