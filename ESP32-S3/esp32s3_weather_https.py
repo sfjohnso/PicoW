@@ -54,7 +54,7 @@ ip_addr = "0.0.0.0"
 # worker thread, capped so we never exhaust RAM with concurrent TLS sessions.
 # Total simultaneous connections = MAX_WORKERS (threads) + 1 (inline accept
 # thread).  Start small; raise MAX_WORKERS only if gc.mem_free() has headroom.
-MAX_WORKERS  = 1
+MAX_WORKERS  = 2
 WORKER_STACK = 16 * 1024         # TLS handshake needs more than the default stack
 _worker_lock = _thread.allocate_lock()
 _active      = 0                 # live worker threads
