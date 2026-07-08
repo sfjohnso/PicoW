@@ -16,6 +16,11 @@
 !.gitignore
 !README.md
 
+# --- shared Claude Code working rules (folder in, ONLY this one file) ---
+#     NOTE: never whitelist other .claude/ contents — they hold auth tokens.
+!.claude/
+!.claude/CLAUDE.md
+
 # --- MMBasic / PicoW program sources (repo root) ---
 !AnalogClock.bas
 !LCD_Life.bas
