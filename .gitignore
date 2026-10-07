@@ -36,6 +36,8 @@
 !tools/serial_script.py
 !tools/start_program.py
 !tools/validate_run.py
+!tools/psp_open.vbs
+!tools/PaintShopPro8.Image.backup.reg
 
 # --- ESP32-S3 MicroPython clock+weather (NEVER track secrets.py / key.pem) ---
 !ESP32-S3/
