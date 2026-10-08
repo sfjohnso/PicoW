@@ -45,3 +45,34 @@
 !ESP32-S3/esp32s3_weather_https.py
 !ESP32-S3/secrets_example.py
 !ESP32-S3/README.md
+
+# --- DM42 native Game of Life (Documents/Projects/DM42/Life) ---
+#     Source + the SDK files it builds from. NOT build/, .dep/, firmware
+#     downloads, the DM42 FAT backup, or the separate DMCP_SDK Hello World clone.
+!Documents/
+!Documents/Projects/
+!Documents/Projects/DM42/
+!Documents/Projects/DM42/Life/
+!Documents/Projects/DM42/Life/.gitattributes
+!Documents/Projects/DM42/Life/LICENSE
+!Documents/Projects/DM42/Life/Makefile
+!Documents/Projects/DM42/Life/README.md
+!Documents/Projects/DM42/Life/stm32_program.ld
+!Documents/Projects/DM42/Life/archive/
+!Documents/Projects/DM42/Life/archive/*.c
+!Documents/Projects/DM42/Life/archive/*.s
+!Documents/Projects/DM42/Life/bin/
+!Documents/Projects/DM42/Life/bin/add_pgm_chsum
+!Documents/Projects/DM42/Life/bin/check_qspi_crc
+!Documents/Projects/DM42/Life/dmcp/
+!Documents/Projects/DM42/Life/dmcp/*.h
+!Documents/Projects/DM42/Life/dmcp/startup_pgm.s
+!Documents/Projects/DM42/Life/dmcp/sys/
+!Documents/Projects/DM42/Life/dmcp/sys/*.c
+!Documents/Projects/DM42/Life/dmcp/sys/*.h
+!Documents/Projects/DM42/Life/src/
+!Documents/Projects/DM42/Life/src/*.c
+!Documents/Projects/DM42/Life/src/*.h
+!Documents/Projects/DM42/Life/src/*.s
+!Documents/Projects/DM42/Life/tools/
+!Documents/Projects/DM42/Life/tools/*
