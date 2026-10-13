@@ -76,3 +76,27 @@
 !Documents/Projects/DM42/Life/src/*.s
 !Documents/Projects/DM42/Life/tools/
 !Documents/Projects/DM42/Life/tools/*
+
+# --- DM42 native Ackermann function (Documents/Projects/DM42/Ackermann) ---
+#     Source + the SDK files it builds from. NOT build/, .dep/, or screens/ (screenshots).
+!Documents/Projects/DM42/Ackermann/
+!Documents/Projects/DM42/Ackermann/.gitattributes
+!Documents/Projects/DM42/Ackermann/LICENSE
+!Documents/Projects/DM42/Ackermann/Makefile
+!Documents/Projects/DM42/Ackermann/README.md
+!Documents/Projects/DM42/Ackermann/stm32_program.ld
+!Documents/Projects/DM42/Ackermann/bin/
+!Documents/Projects/DM42/Ackermann/bin/add_pgm_chsum
+!Documents/Projects/DM42/Ackermann/bin/check_qspi_crc
+!Documents/Projects/DM42/Ackermann/dmcp/
+!Documents/Projects/DM42/Ackermann/dmcp/*.h
+!Documents/Projects/DM42/Ackermann/dmcp/startup_pgm.s
+!Documents/Projects/DM42/Ackermann/dmcp/sys/
+!Documents/Projects/DM42/Ackermann/dmcp/sys/*.c
+!Documents/Projects/DM42/Ackermann/dmcp/sys/*.h
+!Documents/Projects/DM42/Ackermann/src/
+!Documents/Projects/DM42/Ackermann/src/*.c
+!Documents/Projects/DM42/Ackermann/src/*.h
+!Documents/Projects/DM42/Ackermann/src/*.s
+!Documents/Projects/DM42/Ackermann/tools/
+!Documents/Projects/DM42/Ackermann/tools/*
