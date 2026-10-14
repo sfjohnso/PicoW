@@ -224,7 +224,10 @@ static void render(const uint8_t *g, const uint8_t *old) {
 static int wait_choice(int last_mode) {
   static const char keys[NMODES] = { KEY_1, KEY_2, KEY_3, KEY_4, KEY_5 };
   for (;;) {
-    if (key_empty()) { sys_sleep(); continue; }
+    if (key_empty()) {
+      if (is_auto_off() || ST(STAT_PGM_END)) return -1;   // let the DMCP menu power us off
+      sys_sleep(); continue;
+    }
     int k = key_pop();
     if (k == KEY_EXIT)  return -1;
     if (k == KEY_ENTER) return last_mode;
@@ -280,6 +283,7 @@ static void play(uint8_t *prev, uint8_t *cur, uint8_t *nxt, int mode, result_t *
   populate(cur, mode);
   pops[0] = population(cur);
   for (;;) {
+    reset_auto_off();                    // watching a run is activity, not idleness
     render(cur, g ? prev : NULL);
     if (exit_pressed()) break;
     life_step(cur, nxt);
