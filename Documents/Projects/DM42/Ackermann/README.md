@@ -77,8 +77,9 @@ The assembly itself is checked on the calculator by the start-up self-test.
 * A native program has to handle the system's inactivity auto-off itself. The
   timer is 10 minutes; a long run calls `reset_auto_off()` each slice, and idle
   screens return to the DMCP menu when it expires.
-* `lcd_fontWidth()` reports a wider value than the real character advance;
-  `lcd_textWidth(ds, "0")` gives the true width for the fixed-width fonts.
+* The small font (t20) is proportional, so right-aligning text by counting
+  characters clips it. `bar_line()` measures with `lcd_textWidth()` and pads with
+  spaces by pixel width.
 * Redrawing between slices costs time: 120 ms slices lost about 20%, 300 ms
   slices about 9%.
 * Measured engine speed is about 3.9M steps/s on USB power (the CPU is 80 MHz

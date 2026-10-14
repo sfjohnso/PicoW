@@ -240,19 +240,24 @@ static void text_at(disp_stat_t *ds, int x, int y, const char *s) {
 
 static int text_width(disp_stat_t *ds, const char *s) { return lcd_textWidth(ds, s); }
 
-// A reverse-video line across the whole screen at pixel row y, with `left`
-// at the left edge and `right` (if any) pushed against the right edge.
+// A reverse-video line across the screen at pixel row y, with `left` at the left
+// edge and `right` (if any) against the right edge. The fonts are proportional, so
+// the gap is measured in pixels, not characters.
 static void bar_line(disp_stat_t *ds, int y, const char *left, const char *right) {
-  char b[80];
-  int cw = lcd_textWidth(ds, "0");              // lcd_fontWidth() reports a wider value than the real advance
-  int n = LCD_X / (cw ? cw : 10);
-  if (n > 78) n = 78;
-  for (int i = 0; i < n; i++) b[i] = ' ';
+  char b[100];
+  int n = 0;
+  while (left[n] && n < 60) { b[n] = left[n]; n++; }
   b[n] = 0;
-  int ll = 0; while (left[ll] && ll < n) { b[ll] = left[ll]; ll++; }
   if (right) {
-    int rl = 0; while (right[rl]) rl++;
-    if (rl + ll + 1 <= n) for (int i = 0; i < rl; i++) b[n - rl + i] = right[i];
+    int ws = lcd_textWidth(ds, " ");
+    if (ws < 1) ws = 5;
+    int gap = LCD_X - lcd_textWidth(ds, b) - lcd_textWidth(ds, right) - 6;
+    if (gap >= ws) {
+      int sp = gap / ws;
+      while (sp-- > 0 && n < 80) b[n++] = ' ';
+      for (int i = 0; right[i] && n < 98; i++) b[n++] = right[i];
+      b[n] = 0;
+    }
   }
   uint8_t iv = ds->inv, nl = ds->newln;
   ds->inv = 1; ds->newln = 0;
