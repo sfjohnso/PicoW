@@ -124,3 +124,27 @@
 !Documents/Projects/DM42/ZMachine/src/*.s
 !Documents/Projects/DM42/ZMachine/tools/
 !Documents/Projects/DM42/ZMachine/tools/*
+
+# --- DM42 full-screen animation player and GIF converter (Documents/Projects/DM42/Anim) ---
+!Documents/Projects/DM42/Anim/
+!Documents/Projects/DM42/Anim/.gitattributes
+!Documents/Projects/DM42/Anim/LICENSE
+!Documents/Projects/DM42/Anim/Makefile
+!Documents/Projects/DM42/Anim/README.md
+!Documents/Projects/DM42/Anim/stm32_program.ld
+!Documents/Projects/DM42/Anim/bin/
+!Documents/Projects/DM42/Anim/bin/add_pgm_chsum
+!Documents/Projects/DM42/Anim/bin/check_qspi_crc
+!Documents/Projects/DM42/Anim/dmcp/
+!Documents/Projects/DM42/Anim/dmcp/*.h
+!Documents/Projects/DM42/Anim/dmcp/startup_pgm.s
+!Documents/Projects/DM42/Anim/dmcp/sys/
+!Documents/Projects/DM42/Anim/dmcp/sys/*.c
+!Documents/Projects/DM42/Anim/dmcp/sys/*.h
+!Documents/Projects/DM42/Anim/src/
+!Documents/Projects/DM42/Anim/src/*.c
+!Documents/Projects/DM42/Anim/src/*.h
+!Documents/Projects/DM42/Anim/src/*.s
+!Documents/Projects/DM42/Anim/tools/
+!Documents/Projects/DM42/Anim/tools/crc32
+!Documents/Projects/DM42/Anim/tools/*.py

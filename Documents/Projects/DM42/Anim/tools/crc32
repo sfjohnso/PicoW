@@ -1,0 +1,3 @@
+#!/bin/bash
+# crc32 shim (Perl's Archive::Zip crc32 CLI is not installed): prints 8 lowercase hex digits
+exec python -I -c 'import sys,zlib;print("%08x"%(zlib.crc32(open(sys.argv[1],"rb").read())&0xffffffff))' "$1"
