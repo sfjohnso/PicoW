@@ -1,0 +1,32 @@
+== USB powered, 80 MHz, buffer 32768 bytes
+seq 512 B x512: 24 ms, 10666 KB/s, 46 us/op
+seq 4 KB x64: 16 ms, 16000 KB/s, 250 us/op
+seq 12000 B x21: 15 ms, 16406 KB/s, 714 us/op
+seq 32 KB x8: 14 ms, 18285 KB/s, 1750 us/op
+hdr 2 + 6000 B x40: 16 ms, 14653 KB/s, 400 us/op
+random seek+12000 B x20: 22 ms, 10653 KB/s, 1100 us/op
+open+close x20: 5 ms, 250 us/op
+== USB powered, 80 MHz, buffer 32768 bytes
+seq 512 B x512: 22 ms, 11636 KB/s, 42 us/op
+seq 4 KB x64: 16 ms, 16000 KB/s, 250 us/op
+seq 12000 B x21: 16 ms, 15380 KB/s, 761 us/op
+seq 32 KB x8: 15 ms, 17066 KB/s, 1875 us/op
+hdr 2 + 6000 B x40: 17 ms, 13791 KB/s, 425 us/op
+random seek+12000 B x20: 21 ms, 11160 KB/s, 1050 us/op
+open+close x20: 5 ms, 250 us/op
+== battery, 24 MHz, buffer 32768 bytes
+seq 512 B x512: 120 ms, 2133 KB/s, 234 us/op
+seq 4 KB x64: 100 ms, 2560 KB/s, 1562 us/op
+seq 12000 B x21: 99 ms, 2485 KB/s, 4714 us/op
+seq 32 KB x8: 99 ms, 2585 KB/s, 12375 us/op
+hdr 2 + 6000 B x40: 100 ms, 2344 KB/s, 2500 us/op
+random seek+12000 B x20: 128 ms, 1831 KB/s, 6400 us/op
+open+close x20: 22 ms, 1100 us/op
+== battery, 24 MHz, buffer 32768 bytes
+seq 512 B x512: 121 ms, 2115 KB/s, 236 us/op
+seq 4 KB x64: 101 ms, 2534 KB/s, 1578 us/op
+seq 12000 B x21: 100 ms, 2460 KB/s, 4761 us/op
+seq 32 KB x8: 99 ms, 2585 KB/s, 12375 us/op
+hdr 2 + 6000 B x40: 99 ms, 2368 KB/s, 2475 us/op
+random seek+12000 B x20: 121 ms, 1936 KB/s, 6050 us/op
+open+close x20: 22 ms, 1100 us/op

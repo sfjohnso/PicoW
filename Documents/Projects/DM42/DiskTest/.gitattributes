@@ -1,0 +1,2 @@
+# Keep LF on checkout: the bin/ scripts are run by bash and break with CRLF.
+* text eol=lf
