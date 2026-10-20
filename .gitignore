@@ -197,3 +197,12 @@
 !Documents/Projects/DM42/USBTest/tools/
 !Documents/Projects/DM42/USBTest/tools/crc32
 !Documents/Projects/DM42/USBTest/tools/*.py
+
+# --- DM42 programming guide generator (Documents/Projects/DM42/Guide) ---
+#     Scripts only. NOT fig/ (generated figures), the .docx/.pdf outputs, or __pycache__.
+!Documents/Projects/DM42/Guide/
+!Documents/Projects/DM42/Guide/build_guide.py
+!Documents/Projects/DM42/Guide/content_a.py
+!Documents/Projects/DM42/Guide/content_b.py
+!Documents/Projects/DM42/Guide/docx_lib.py
+!Documents/Projects/DM42/Guide/make_figs.py
