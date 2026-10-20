@@ -100,3 +100,27 @@
 !Documents/Projects/DM42/Ackermann/src/*.s
 !Documents/Projects/DM42/Ackermann/tools/
 !Documents/Projects/DM42/Ackermann/tools/*
+
+# --- DM42 native Z-machine (Infocom) story player (Documents/Projects/DM42/ZMachine) ---
+#     Source + the SDK files it builds from. NOT build/, .dep/, screens/ (screenshots) or stories/ (story files).
+!Documents/Projects/DM42/ZMachine/
+!Documents/Projects/DM42/ZMachine/.gitattributes
+!Documents/Projects/DM42/ZMachine/LICENSE
+!Documents/Projects/DM42/ZMachine/Makefile
+!Documents/Projects/DM42/ZMachine/README.md
+!Documents/Projects/DM42/ZMachine/stm32_program.ld
+!Documents/Projects/DM42/ZMachine/bin/
+!Documents/Projects/DM42/ZMachine/bin/add_pgm_chsum
+!Documents/Projects/DM42/ZMachine/bin/check_qspi_crc
+!Documents/Projects/DM42/ZMachine/dmcp/
+!Documents/Projects/DM42/ZMachine/dmcp/*.h
+!Documents/Projects/DM42/ZMachine/dmcp/startup_pgm.s
+!Documents/Projects/DM42/ZMachine/dmcp/sys/
+!Documents/Projects/DM42/ZMachine/dmcp/sys/*.c
+!Documents/Projects/DM42/ZMachine/dmcp/sys/*.h
+!Documents/Projects/DM42/ZMachine/src/
+!Documents/Projects/DM42/ZMachine/src/*.c
+!Documents/Projects/DM42/ZMachine/src/*.h
+!Documents/Projects/DM42/ZMachine/src/*.s
+!Documents/Projects/DM42/ZMachine/tools/
+!Documents/Projects/DM42/ZMachine/tools/*
