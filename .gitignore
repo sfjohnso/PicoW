@@ -173,3 +173,27 @@
 !Documents/Projects/DM42/DiskTest/tools/crc32
 !Documents/Projects/DM42/DiskTest/results/
 !Documents/Projects/DM42/DiskTest/results/*.txt
+
+# --- DM42 USB serial experiment (Documents/Projects/DM42/USBTest) ---
+!Documents/Projects/DM42/USBTest/
+!Documents/Projects/DM42/USBTest/.gitattributes
+!Documents/Projects/DM42/USBTest/LICENSE
+!Documents/Projects/DM42/USBTest/Makefile
+!Documents/Projects/DM42/USBTest/README.md
+!Documents/Projects/DM42/USBTest/stm32_program.ld
+!Documents/Projects/DM42/USBTest/bin/
+!Documents/Projects/DM42/USBTest/bin/add_pgm_chsum
+!Documents/Projects/DM42/USBTest/bin/check_qspi_crc
+!Documents/Projects/DM42/USBTest/dmcp/
+!Documents/Projects/DM42/USBTest/dmcp/*.h
+!Documents/Projects/DM42/USBTest/dmcp/startup_pgm.s
+!Documents/Projects/DM42/USBTest/dmcp/sys/
+!Documents/Projects/DM42/USBTest/dmcp/sys/*.c
+!Documents/Projects/DM42/USBTest/dmcp/sys/*.h
+!Documents/Projects/DM42/USBTest/src/
+!Documents/Projects/DM42/USBTest/src/*.c
+!Documents/Projects/DM42/USBTest/src/*.h
+!Documents/Projects/DM42/USBTest/src/*.s
+!Documents/Projects/DM42/USBTest/tools/
+!Documents/Projects/DM42/USBTest/tools/crc32
+!Documents/Projects/DM42/USBTest/tools/*.py
