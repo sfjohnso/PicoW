@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9ced6"/>
+      <stop offset="0.45" stop-color="#7d8490"/>
+      <stop offset="1" stop-color="#30343b"/>
+    </linearGradient>
+    <linearGradient id="pad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a4d55"/>
+      <stop offset="1" stop-color="#17181b"/>
+    </linearGradient>
+    <radialGradient id="shell" cx="0.35" cy="0.3" r="0.85">
+      <stop offset="0" stop-color="#6fb0ff"/>
+      <stop offset="0.45" stop-color="#2a6fd1"/>
+      <stop offset="1" stop-color="#0f2f66"/>
+    </radialGradient>
+    <linearGradient id="chrome" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#9aa1ac"/>
+      <stop offset="1" stop-color="#e8ebf0"/>
+    </linearGradient>
+    <radialGradient id="foam" cx="0.5" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#5a5d66"/>
+      <stop offset="1" stop-color="#121316"/>
+    </radialGradient>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="yoke" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e4e7ec"/>
+      <stop offset="0.5" stop-color="#8c929d"/>
+      <stop offset="1" stop-color="#3a3e46"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+  </defs>
+
+  <!-- floor shadow -->
+  <ellipse cx="128" cy="238" rx="86" ry="9" fill="#000" opacity="0.35" filter="url(#blur)"/>
+
+  <!-- headband: padded underside, steel arch, highlight -->
+  <path d="M56 150 C56 34 200 34 200 150" fill="none" stroke="url(#pad)" stroke-width="13" stroke-linecap="round" transform="translate(0 11)"/>
+  <path d="M56 150 C56 34 200 34 200 150" fill="none" stroke="#14151a" stroke-width="20" stroke-linecap="round" opacity="0.35" transform="translate(0 3)" filter="url(#blur)"/>
+  <path d="M56 150 C56 34 200 34 200 150" fill="none" stroke="url(#band)" stroke-width="18" stroke-linecap="round"/>
+  <path d="M63 138 C66 52 190 52 193 138" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.55" transform="translate(0 -6)"/>
+
+  <!-- yokes (bands to cups) -->
+  <rect x="47" y="140" width="18" height="40" rx="8" fill="url(#yoke)"/>
+  <rect x="191" y="140" width="18" height="40" rx="8" fill="url(#yoke)"/>
+
+  <!-- left ear cup -->
+  <g>
+    <ellipse cx="74" cy="184" rx="15" ry="38" fill="url(#foam)"/>
+    <ellipse cx="70" cy="178" rx="5" ry="22" fill="#ffffff" opacity="0.12"/>
+    <ellipse cx="52" cy="184" rx="38" ry="52" fill="url(#chrome)"/>
+    <ellipse cx="52" cy="184" rx="33" ry="47" fill="url(#shell)"/>
+    <ellipse cx="52" cy="184" rx="33" ry="47" fill="none" stroke="#06193d" stroke-width="2" opacity="0.5"/>
+    <ellipse cx="46" cy="156" rx="22" ry="22" fill="url(#gloss)"/>
+    <circle cx="52" cy="190" r="12" fill="none" stroke="url(#chrome)" stroke-width="3" opacity="0.85"/>
+  </g>
+
+  <!-- right ear cup (mirror) -->
+  <g>
+    <ellipse cx="182" cy="184" rx="15" ry="38" fill="url(#foam)"/>
+    <ellipse cx="178" cy="178" rx="5" ry="22" fill="#ffffff" opacity="0.12"/>
+    <ellipse cx="204" cy="184" rx="38" ry="52" fill="url(#chrome)"/>
+    <ellipse cx="204" cy="184" rx="33" ry="47" fill="url(#shell)"/>
+    <ellipse cx="204" cy="184" rx="33" ry="47" fill="none" stroke="#06193d" stroke-width="2" opacity="0.5"/>
+    <ellipse cx="198" cy="156" rx="22" ry="22" fill="url(#gloss)"/>
+    <circle cx="204" cy="190" r="12" fill="none" stroke="url(#chrome)" stroke-width="3" opacity="0.85"/>
+  </g>
+</svg>

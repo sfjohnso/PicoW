@@ -38,6 +38,17 @@
 !tools/validate_run.py
 !tools/psp_open.vbs
 !tools/PaintShopPro8.Image.backup.reg
+# Realtek headphone-jack fix (script, task setup, and the "Fix Headphones" popup/icon; not the rendered PNGs)
+!tools/restart_realtek_audio.ps1
+!tools/register_audio_task.ps1
+!tools/harden_audio_task.ps1
+!tools/headphones_icon/
+!tools/headphones_icon/headphones.svg
+!tools/headphones_icon/headphones.ico
+!tools/headphones_icon/make_ico.py
+!tools/headphones_icon/make_shortcut.ps1
+!tools/headphones_icon/FixHeadphones.vbs
+!tools/headphones_icon/HeadphonesStatus.ps1
 
 # --- ESP32-S3 MicroPython clock+weather (NEVER track secrets.py / key.pem) ---
 !ESP32-S3/
