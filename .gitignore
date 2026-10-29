@@ -217,3 +217,8 @@
 !Documents/Projects/DM42/Guide/content_b.py
 !Documents/Projects/DM42/Guide/docx_lib.py
 !Documents/Projects/DM42/Guide/make_figs.py
+
+# --- PicoSwiss: Swiss Federal Railways-style analog clock (Waveshare Pico-Eval-Board, COM10) ---
+!Documents/Projects/RaspPiPico Projects/
+!Documents/Projects/RaspPiPico Projects/PicoWClock/
+!Documents/Projects/RaspPiPico Projects/PicoWClock/PicoSwiss.bas
