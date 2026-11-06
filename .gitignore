@@ -240,3 +240,17 @@
 !Documents/Projects/ESP32-P4/wifitest/main/CMakeLists.txt
 !Documents/Projects/ESP32-P4/wifitest/main/main.c
 !Documents/Projects/ESP32-P4/wifitest/main/idf_component.yml
+
+# --- ESP32-P4 clock + weather (Documents/Projects/ESP32-P4/p4clock) ---
+#     Source + font generator only. NOT wifi_creds.h, main/font_data.c (generated from
+#     Segoe UI), build/, sdkconfig, dependencies.lock, managed_components/.
+!Documents/Projects/ESP32-P4/p4clock/
+!Documents/Projects/ESP32-P4/p4clock/CMakeLists.txt
+!Documents/Projects/ESP32-P4/p4clock/sdkconfig.defaults
+!Documents/Projects/ESP32-P4/p4clock/main/
+!Documents/Projects/ESP32-P4/p4clock/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/p4clock/main/main.c
+!Documents/Projects/ESP32-P4/p4clock/main/font.h
+!Documents/Projects/ESP32-P4/p4clock/main/idf_component.yml
+!Documents/Projects/ESP32-P4/p4clock/tools/
+!Documents/Projects/ESP32-P4/p4clock/tools/gen_fonts.py
