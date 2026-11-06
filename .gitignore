@@ -49,6 +49,14 @@
 !tools/headphones_icon/make_shortcut.ps1
 !tools/headphones_icon/FixHeadphones.vbs
 !tools/headphones_icon/HeadphonesStatus.ps1
+# "Switch Display" app: detect the external monitor and switch to it (not preview.png or the run log)
+!tools/display_switch/
+!tools/display_switch/SwitchToExternal.ps1
+!tools/display_switch/SwitchDisplay.vbs
+!tools/display_switch/display.svg
+!tools/display_switch/display.ico
+!tools/display_switch/make_ico.py
+!tools/display_switch/make_shortcut.ps1
 
 # --- ESP32-S3 MicroPython clock+weather (NEVER track secrets.py / key.pem) ---
 !ESP32-S3/

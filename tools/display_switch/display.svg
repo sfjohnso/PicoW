@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a606b"/>
+      <stop offset="0.5" stop-color="#2b2e35"/>
+      <stop offset="1" stop-color="#14151a"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#9aa1ac"/>
+      <stop offset="1" stop-color="#e8ebf0"/>
+    </linearGradient>
+    <radialGradient id="screen" cx="0.3" cy="0.25" r="1.0">
+      <stop offset="0" stop-color="#8cc4ff"/>
+      <stop offset="0.45" stop-color="#2a6fd1"/>
+      <stop offset="1" stop-color="#0b2459"/>
+    </radialGradient>
+    <linearGradient id="glare" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="neck" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e4e7ec"/>
+      <stop offset="0.5" stop-color="#8c929d"/>
+      <stop offset="1" stop-color="#3a3e46"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8ebf0"/>
+      <stop offset="1" stop-color="#6c727d"/>
+    </linearGradient>
+    <filter id="blur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+    <clipPath id="scr"><rect x="40" y="48" width="176" height="108" rx="4"/></clipPath>
+  </defs>
+
+  <!-- floor shadow -->
+  <ellipse cx="128" cy="232" rx="82" ry="9" fill="#000" opacity="0.35" filter="url(#blur)"/>
+
+  <!-- stand: base, neck -->
+  <rect x="78" y="204" width="100" height="16" rx="8" fill="url(#base)"/>
+  <rect x="78" y="204" width="100" height="5" rx="2.5" fill="#fff" opacity="0.55"/>
+  <path d="M110 170 L146 170 L152 208 L104 208 Z" fill="url(#neck)"/>
+
+  <!-- bezel + chrome rim -->
+  <rect x="22" y="30" width="212" height="148" rx="12" fill="url(#rim)"/>
+  <rect x="26" y="34" width="204" height="140" rx="10" fill="url(#bezel)"/>
+
+  <!-- screen -->
+  <rect x="40" y="48" width="176" height="108" rx="4" fill="url(#screen)"/>
+  <g clip-path="url(#scr)">
+    <!-- a hint of a desktop: taskbar and two window shapes -->
+    <rect x="40" y="140" width="176" height="16" fill="#06193d" opacity="0.55"/>
+    <rect x="58" y="66" width="70" height="46" rx="3" fill="#ffffff" opacity="0.18"/>
+    <rect x="136" y="80" width="62" height="40" rx="3" fill="#ffffff" opacity="0.12"/>
+    <polygon points="40,48 150,48 70,156 40,156" fill="url(#glare)" opacity="0.55"/>
+  </g>
+  <rect x="40" y="48" width="176" height="108" rx="4" fill="none" stroke="#06193d" stroke-width="2" opacity="0.6"/>
+
+  <!-- power LED -->
+  <circle cx="204" cy="166" r="2.6" fill="#59e07a"/>
+  <circle cx="204" cy="166" r="5" fill="#59e07a" opacity="0.25"/>
+</svg>
