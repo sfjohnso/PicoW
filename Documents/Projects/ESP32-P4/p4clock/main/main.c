@@ -1,7 +1,7 @@
 // Clock + weather display for the Waveshare ESP32-P4 3.5" board (ST7796, 480x320 landscape).
 //
 // Layout and colors follow the ESP32-S3 web page: analog dial, digital time, date,
-// weather tiles for Newbury Park, CA 91320. Between 22:00 and 07:00 local time every
+// weather tiles for the location set in user_config.h. Between 22:00 and 07:00 local time every
 // color is replaced by a muted red of the same brightness.
 //
 // Wi-Fi: esp_wifi_remote -> SDIO -> ESP32-C6.  Time: SNTP.  Weather: Open-Meteo over HTTPS.
@@ -29,13 +29,10 @@
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include "font.h"
-#include "wifi_creds.h"
+#include "user_config.h"        // Wi-Fi, location, time zone: copy from user_config.h.example
 
 static const char *TAG = "p4clock";
 
-#define LAT "34.1872"            // Newbury Park, CA 91320
-#define LON "-118.9114"
-#define TZ_POSIX "PST8PDT,M3.2.0,M11.1.0"
 #define NIGHT_START_HOUR 22
 #define NIGHT_END_HOUR 7
 #define WEATHER_EVERY_S (30 * 60)
@@ -386,7 +383,7 @@ static const char *compass(int deg)
 static void draw_header(void)
 {
     region_begin(RW, 20);
-    draw_text_c(&sc, &f_lbl, RW / 2, 14, "NEWBURY PARK, CA \267 91320", P.loc);
+    draw_text_c(&sc, &f_lbl, RW / 2, 14, LOCATION_LABEL, P.loc);
     region_end(RX, HDR_Y);
 }
 
@@ -422,7 +419,9 @@ static void draw_date(const struct tm *tm)
         snprintf(d, sizeof d, "%s, %.3s %d, %d", WD[tm->tm_wday], MO[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
     region_begin(LEFT_W, DATE_H);
     draw_text_c(&sc, &f_date, LEFT_W / 2, 17, d, P.date);
-    draw_text_c(&sc, &f_lbl, LEFT_W / 2, 36, tm->tm_isdst > 0 ? "PDT" : "PST", P.tz);
+    char zn[8];
+    strftime(zn, sizeof zn, "%Z", tm);                 // PST / PDT / ... from TZ_POSIX
+    draw_text_c(&sc, &f_lbl, LEFT_W / 2, 36, zn, P.tz);
     region_end(0, DATE_Y);
 }
 
@@ -589,7 +588,7 @@ static bool fetch_weather(void)
         "https://api.open-meteo.com/v1/forecast?latitude=" LAT "&longitude=" LON
         "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,"
         "wind_speed_10m,wind_direction_10m,is_day"
-        "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles";
+        "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto";
     wlen = 0;
     esp_http_client_config_t cfg = {
         .url = url, .event_handler = http_ev, .timeout_ms = 15000,

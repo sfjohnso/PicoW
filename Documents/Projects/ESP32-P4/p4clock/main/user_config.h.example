@@ -1,0 +1,20 @@
+// Copy this file to user_config.h (same folder) and fill in your own values
+// BEFORE building. user_config.h is git-ignored so your password is never committed.
+
+// --- Wi-Fi (2.4 GHz or 5 GHz; WPA2 or better) ---
+#define WIFI_SSID "your-network-name"
+#define WIFI_PASS "your-network-password"
+
+// --- Location ---
+// Text shown at the top of the right column. \267 is the middle dot (.), \260 the degree sign.
+#define LOCATION_LABEL "YOUR TOWN, ST \267 12345"
+// Latitude / longitude of the location, as strings in decimal degrees (negative = south / west).
+// See README.md, "Choosing a location", for how to get these from a zip code.
+#define LAT "40.7128"
+#define LON "-74.0060"
+
+// --- Time zone (POSIX TZ string, includes the daylight-saving rule) ---
+// US Pacific: "PST8PDT,M3.2.0,M11.1.0"   US Mountain: "MST7MDT,M3.2.0,M11.1.0"
+// US Central: "CST6CDT,M3.2.0,M11.1.0"   US Eastern:  "EST5EDT,M3.2.0,M11.1.0"
+// Arizona (no DST): "MST7"   Other zones: see README.md.
+#define TZ_POSIX "EST5EDT,M3.2.0,M11.1.0"

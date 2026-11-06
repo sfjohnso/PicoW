@@ -252,5 +252,6 @@
 !Documents/Projects/ESP32-P4/p4clock/main/main.c
 !Documents/Projects/ESP32-P4/p4clock/main/font.h
 !Documents/Projects/ESP32-P4/p4clock/main/idf_component.yml
+!Documents/Projects/ESP32-P4/p4clock/main/user_config.h.example
 !Documents/Projects/ESP32-P4/p4clock/tools/
 !Documents/Projects/ESP32-P4/p4clock/tools/gen_fonts.py
