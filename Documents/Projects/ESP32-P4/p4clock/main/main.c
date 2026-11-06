@@ -162,12 +162,12 @@ static uint16_t mk(uint32_t rgb, bool night)
 
 static void set_palette(bool n)
 {
-    P.bg    = mk(0x121826, n);  P.dial  = mk(0x0e1422, n);  P.edge  = mk(0x28324a, n);
-    P.tick  = mk(0x5b6b8c, n);  P.tickm = mk(0xaebbd6, n);  P.num   = mk(0xcfe0ff, n);
+    P.bg    = mk(0x121826, n);  P.dial  = mk(0x0e1422, n);  P.edge  = mk(0x3b4869, n);
+    P.tick  = mk(0x7686a9, n);  P.tickm = mk(0xaebbd6, n);  P.num   = mk(0xcfe0ff, n);
     P.hand  = mk(0xe8edf6, n);  P.text  = mk(0xe8edf6, n);  P.loc   = mk(0x8aa0c6, n);
     P.date  = mk(0xaebbd6, n);  P.tz    = mk(0x7f8db0, n);  P.tbg   = mk(0x0e1422, n);
     P.tedge = mk(0x232d44, n);  P.label = mk(0x7f8db0, n);  P.cond  = mk(0xcfe0ff, n);
-    P.foot  = mk(0x66749a, n);
+    P.foot  = mk(0x8795bb, n);
     P.sec   = n ? rgb565(170, 24, 24) : rgb565(0xff, 0x6b, 0x6b);   // keep the second hand visible
 }
 
