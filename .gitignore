@@ -222,3 +222,12 @@
 !Documents/Projects/RaspPiPico Projects/
 !Documents/Projects/RaspPiPico Projects/PicoWClock/
 !Documents/Projects/RaspPiPico Projects/PicoWClock/PicoSwiss.bas
+
+# --- ESP32-P4 touch/LCD test (Documents/Projects/ESP32-P4/touchtest) ---
+#     Source only. NOT build/, sdkconfig, or the flash backup.
+!Documents/Projects/ESP32-P4/
+!Documents/Projects/ESP32-P4/touchtest/
+!Documents/Projects/ESP32-P4/touchtest/CMakeLists.txt
+!Documents/Projects/ESP32-P4/touchtest/main/
+!Documents/Projects/ESP32-P4/touchtest/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/touchtest/main/main.c
