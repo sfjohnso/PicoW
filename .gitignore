@@ -231,3 +231,12 @@
 !Documents/Projects/ESP32-P4/touchtest/main/
 !Documents/Projects/ESP32-P4/touchtest/main/CMakeLists.txt
 !Documents/Projects/ESP32-P4/touchtest/main/main.c
+
+# --- ESP32-P4 Wi-Fi test (Documents/Projects/ESP32-P4/wifitest) ---
+#     Source + dependency manifest only. NOT wifi_creds.h, build/, sdkconfig, managed_components/.
+!Documents/Projects/ESP32-P4/wifitest/
+!Documents/Projects/ESP32-P4/wifitest/CMakeLists.txt
+!Documents/Projects/ESP32-P4/wifitest/main/
+!Documents/Projects/ESP32-P4/wifitest/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/wifitest/main/main.c
+!Documents/Projects/ESP32-P4/wifitest/main/idf_component.yml
