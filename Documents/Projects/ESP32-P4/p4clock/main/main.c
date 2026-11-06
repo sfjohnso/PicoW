@@ -15,6 +15,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
 #include "esp_heap_caps.h"
@@ -53,6 +54,9 @@ static const char *TAG = "p4clock";
 static esp_lcd_panel_io_handle_t lcd_io;
 static SemaphoreHandle_t lcd_done;
 static uint16_t *bounce;
+static const uint8_t MADCTL[2] = { 0x28, 0xE8 };   // landscape, and the same rotated 180 degrees
+static int rot;                                    // 0/1: index into MADCTL
+static volatile bool flip_req;                     // set by touch_task, handled by ui_task
 
 static bool on_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *e, void *u)
 {
@@ -123,7 +127,7 @@ static void lcd_init(void)
     vTaskDelay(pdMS_TO_TICKS(120));
     cmd(0xF0, (uint8_t[]){0xC3}, 1);
     cmd(0xF0, (uint8_t[]){0x96}, 1);
-    cmd(0x36, (uint8_t[]){0x28}, 1);          // landscape (MV), BGR
+    cmd(0x36, &MADCTL[rot], 1);               // landscape (MV), BGR
     cmd(0x3A, (uint8_t[]){0x55}, 1);          // 16 bits/pixel
     cmd(0xB4, (uint8_t[]){0x01}, 1);
     cmd(0xF0, (uint8_t[]){0x3C}, 1);
@@ -495,6 +499,13 @@ static void ui_task(void *arg)
         localtime_r(&t, &tm);
         int night = synced && (tm.tm_hour >= NIGHT_START_HOUR || tm.tm_hour < NIGHT_END_HOUR);
 
+        if (flip_req) {                                  // screen was touched: rotate 180 degrees
+            flip_req = false;
+            rot ^= 1;
+            cmd(0x36, &MADCTL[rot], 1);
+            cur_night = -1;                              // forces the full repaint below
+            ESP_LOGI(TAG, "touch: display rotated %s", rot ? "180" : "back to normal");
+        }
         if (night != cur_night) {                        // palette changed: repaint everything
             cur_night = night;
             set_palette(night);
@@ -544,6 +555,52 @@ static void ui_task(void *arg)
         float hf = (tm.tm_hour % 12) + mf / 60;
         draw_dial(hf, mf, sf);
         vTaskDelay(1);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Touch: FT6336-style chip at I2C 0x38 (SDA7 SCL8, reset GPIO29). Any new touch flips the screen.
+// ---------------------------------------------------------------------------
+#define PIN_TP_RST 29
+#define PIN_SDA 7
+#define PIN_SCL 8
+#define FLIP_LOCKOUT_MS 800                  // ignore touches right after a flip
+
+static void touch_task(void *arg)
+{
+    gpio_config_t o = { .pin_bit_mask = 1ULL << PIN_TP_RST, .mode = GPIO_MODE_OUTPUT };
+    gpio_config(&o);
+    gpio_set_level(PIN_TP_RST, 0);           // reset is held low by a resistor until driven
+    vTaskDelay(pdMS_TO_TICKS(20));
+    gpio_set_level(PIN_TP_RST, 1);
+    vTaskDelay(pdMS_TO_TICKS(300));
+
+    i2c_master_bus_config_t bc = {
+        .i2c_port = I2C_NUM_0, .sda_io_num = PIN_SDA, .scl_io_num = PIN_SCL,
+        .clk_source = I2C_CLK_SRC_DEFAULT, .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    i2c_master_bus_handle_t bus;
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bc, &bus));
+    i2c_device_config_t dc = { .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = 0x38,
+                               .scl_speed_hz = 400000 };
+    i2c_master_dev_handle_t dev;
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dc, &dev));
+
+    bool was_down = false;
+    int64_t last_flip_ms = -FLIP_LOCKOUT_MS;
+    while (1) {
+        uint8_t reg = 0x02, n = 0;                       // register 2 = number of touch points
+        if (i2c_master_transmit_receive(dev, &reg, 1, &n, 1, 100) == ESP_OK) {
+            bool down = (n & 0x0F) > 0 && (n & 0x0F) < 3;
+            int64_t now_ms = esp_timer_get_time() / 1000;
+            if (down && !was_down && now_ms - last_flip_ms >= FLIP_LOCKOUT_MS) {
+                flip_req = true;
+                last_flip_ms = now_ms;
+            }
+            was_down = down;
+        }
+        vTaskDelay(pdMS_TO_TICKS(30));
     }
 }
 
@@ -644,6 +701,7 @@ void app_main(void)
     wx_lock = xSemaphoreCreateMutex();
     lcd_init();
     xTaskCreate(ui_task, "ui", 8192, NULL, 5, NULL);
+    xTaskCreate(touch_task, "touch", 4096, NULL, 4, NULL);
 
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) {
