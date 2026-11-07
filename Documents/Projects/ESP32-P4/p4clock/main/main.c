@@ -278,14 +278,15 @@ static void rrect(surf_t *s, int x, int y, int w, int h, float r, uint16_t c)
 // Layout (screen coordinates)
 // ---------------------------------------------------------------------------
 #define LEFT_W 240                       // left column: dial, time, date
-#define DIAL 192
+#define DIAL 220
 #define DIAL_X ((LEFT_W - DIAL) / 2)
-#define DIAL_Y 4
+#define DIAL_Y 39                        // visible ring spans y 43.4 .. 254.6
 #define K (DIAL / 100.0f)                // S3 page used a 100-unit SVG viewBox
-#define TIME_Y 200
-#define TIME_H 44
-#define DATE_Y 246
-#define DATE_H 40
+// Left column, top to bottom, with ~15.7 px between date digits, ring, time digits and footer text:
+#define DATE_Y 12                        // date baseline at y 28 (digits 12 px tall)
+#define DATE_H 24
+#define TIME_Y 264                       // time baseline at y 286 (digits 16 px tall)
+#define TIME_H 28
 #define RX 252                           // right column: x of tiles, width RW
 #define RW 216
 #define HDR_Y 6
@@ -315,7 +316,7 @@ static void build_face(void)
     surf_fill(&s, P.bg);
     float c = DIAL / 2.0f, R = 48 * K;
     aa_disc(&s, c, c, R, P.edge);
-    aa_disc(&s, c, c, R - 1.5f * K, P.dial);
+    aa_disc(&s, c, c, R - 1.5f * K - 1.0f, P.dial);   // ring = 1.5 units + 1 px
     for (int i = 0; i < 60; i++) {
         bool maj = (i % 5 == 0);
         float a = i * 6 * (float)M_PI / 180, sn = sinf(a), cs = cosf(a);
@@ -391,17 +392,19 @@ static void draw_header(void)
     region_end(RX, HDR_Y);
 }
 
-static void draw_time(int h24, int m, int s)
+static void draw_time(const struct tm *tm)
 {
-    char t[16], ap[3];
-    int h12 = h24 % 12 ? h24 % 12 : 12;
-    snprintf(t, sizeof t, "%d:%02d:%02d", h12, m, s);
-    snprintf(ap, sizeof ap, "%s", h24 < 12 ? "AM" : "PM");
-    int tw = text_w(&f_time, t), aw = text_w(&f_val, ap);
-    int x = (LEFT_W - (tw + 6 + aw)) / 2;
+    char t[16], ap[3], zn[8];
+    int h12 = tm->tm_hour % 12 ? tm->tm_hour % 12 : 12;
+    snprintf(t, sizeof t, "%d:%02d:%02d", h12, tm->tm_min, tm->tm_sec);
+    snprintf(ap, sizeof ap, "%s", tm->tm_hour < 12 ? "AM" : "PM");
+    strftime(zn, sizeof zn, "%Z", tm);                   // PST / PDT / ... from TZ_POSIX
+    int tw = text_w(&f_time, t), aw = text_w(&f_val, ap), zw = text_w(&f_val, zn);
+    int x = (LEFT_W - (tw + 6 + aw + 6 + zw)) / 2;
     region_begin(LEFT_W, TIME_H);
-    draw_text(&sc, &f_time, x, 34, t, P.text);
-    draw_text(&sc, &f_val, x + tw + 6, 34, ap, P.date);
+    draw_text(&sc, &f_time, x, 22, t, P.text);
+    draw_text(&sc, &f_val, x + tw + 6, 22, ap, P.date);
+    draw_text(&sc, &f_val, x + tw + 6 + aw + 6, 22, zn, P.date);
     region_end(0, TIME_Y);
 }
 
@@ -422,10 +425,7 @@ static void draw_date(const struct tm *tm)
     if (text_w(&f_date, d) > LEFT_W - 8)             // too wide for the column: abbreviate the month
         snprintf(d, sizeof d, "%s, %.3s %d, %d", WD[tm->tm_wday], MO[tm->tm_mon], tm->tm_mday, tm->tm_year + 1900);
     region_begin(LEFT_W, DATE_H);
-    draw_text_c(&sc, &f_date, LEFT_W / 2, 17, d, P.date);
-    char zn[8];
-    strftime(zn, sizeof zn, "%Z", tm);                 // PST / PDT / ... from TZ_POSIX
-    draw_text_c(&sc, &f_lbl, LEFT_W / 2, 36, zn, P.tz);
+    draw_text_c(&sc, &f_date, LEFT_W / 2, 16, d, P.date);
     region_end(0, DATE_Y);
 }
 
@@ -544,7 +544,7 @@ static void ui_task(void *arg)
 
         if (tm.tm_sec != last_sec) {
             last_sec = tm.tm_sec;
-            draw_time(tm.tm_hour, tm.tm_min, tm.tm_sec);
+            draw_time(&tm);
         }
         if (tm.tm_yday != last_yday) {
             last_yday = tm.tm_yday;
