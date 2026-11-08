@@ -15,4 +15,5 @@ dependencies:
   #   # All dependencies of `main` are public by default.
   #   public: true
   espressif/esp_wifi_remote: '*'
-  espressif/esp_hosted: '2.0.17'   # matches the older ESP32-C6 firmware shipped on the board
+  espressif/esp_hosted: 2.0.17     # matches the older ESP32-C6 firmware shipped on the board
+  espressif/qrcode: '*'

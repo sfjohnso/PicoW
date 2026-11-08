@@ -265,6 +265,12 @@
 !Documents/Projects/ESP32-P4/p4clock/tools/gen_fonts.py
 !Documents/Projects/ESP32-P4/p4clock/partitions.csv
 !Documents/Projects/ESP32-P4/p4clock/main/installer_defaults.h
+!Documents/Projects/ESP32-P4/p4clock/main/settings.c
+!Documents/Projects/ESP32-P4/p4clock/main/settings.h
+!Documents/Projects/ESP32-P4/p4clock/main/portal.c
+!Documents/Projects/ESP32-P4/p4clock/main/portal.h
+!Documents/Projects/ESP32-P4/p4clock/main/tz_table.h
+!Documents/Projects/ESP32-P4/p4clock/tools/gen_tz_table.py
 
 # --- P4 clock installer source (Documents/Projects/ESP32-P4/installer); NOT .venv, build, dist or firmware ---
 !Documents/Projects/ESP32-P4/installer/

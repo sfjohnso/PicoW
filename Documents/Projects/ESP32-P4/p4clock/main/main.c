@@ -30,55 +30,11 @@
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include "font.h"
-#include "esp_partition.h"
-#ifdef P4CLOCK_INSTALLER_BUILD
-#include "installer_defaults.h"   // placeholders; the installer writes the real settings
-#else
-#include "user_config.h"        // Wi-Fi, location, time zone: copy from user_config.h.example
-#endif
+#include "settings.h"
+#include "portal.h"
+#include "qrcode.h"
 
 static const char *TAG = "p4clock";
-
-// ---------------------------------------------------------------------------
-// Settings: the compile-time defaults from user_config.h, overridden by a JSON
-// block in the "config" flash partition when the installer wrote one.
-// ---------------------------------------------------------------------------
-static struct {
-    char ssid[33], pass[65], label[40], lat[16], lon[16], tz[64];
-} settings;
-
-static void settings_set(char *dst, size_t n, cJSON *json, const char *key)
-{
-    cJSON *v = cJSON_GetObjectItem(json, key);
-    if (cJSON_IsString(v) && v->valuestring[0]) strlcpy(dst, v->valuestring, n);
-}
-
-static void load_settings(void)
-{
-    strlcpy(settings.ssid, WIFI_SSID, sizeof settings.ssid);
-    strlcpy(settings.pass, WIFI_PASS, sizeof settings.pass);
-    strlcpy(settings.label, LOCATION_LABEL, sizeof settings.label);
-    strlcpy(settings.lat, LAT, sizeof settings.lat);
-    strlcpy(settings.lon, LON, sizeof settings.lon);
-    strlcpy(settings.tz, TZ_POSIX, sizeof settings.tz);
-
-    const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "config");
-    if (!p) return;
-    static char buf[1024];
-    if (esp_partition_read(p, 0, buf, sizeof buf - 1) != ESP_OK) return;
-    buf[sizeof buf - 1] = 0;
-    if (buf[0] != '{') return;                           // erased flash reads 0xFF: keep the defaults
-    cJSON *json = cJSON_Parse(buf);
-    if (!json) { ESP_LOGW(TAG, "config partition is not valid JSON; using the built-in settings"); return; }
-    settings_set(settings.ssid, sizeof settings.ssid, json, "ssid");
-    settings_set(settings.pass, sizeof settings.pass, json, "pass");
-    settings_set(settings.label, sizeof settings.label, json, "label");
-    settings_set(settings.lat, sizeof settings.lat, json, "lat");
-    settings_set(settings.lon, sizeof settings.lon, json, "lon");
-    settings_set(settings.tz, sizeof settings.tz, json, "tz");
-    cJSON_Delete(json);
-    ESP_LOGI(TAG, "settings from the config partition: network '%s', place '%s'", settings.ssid, settings.label);
-}
 
 #define NIGHT_START_HOUR 22
 #define NIGHT_END_HOUR 7
@@ -530,6 +486,93 @@ static void draw_footer(void)
     region_end(0, FOOT_Y);
 }
 
+// ---------------------------------------------------------------------------
+// Setup screen: QR code that joins the clock's own Wi-Fi network, plus the steps in words
+// ---------------------------------------------------------------------------
+static uint16_t *qr_px;
+static int qr_side, qr_scale;
+
+static void qr_render(esp_qrcode_handle_t q)
+{
+    const int quiet = 2;                                     // quiet-zone modules
+    int n = esp_qrcode_get_size(q);
+    int side = (n + 2 * quiet) * qr_scale;
+    uint16_t *px = malloc(side * side * 2);
+    if (!px) return;
+    for (int i = 0; i < side * side; i++) px[i] = 0xFFFF;    // white, so phone cameras read it in any palette
+    for (int y = 0; y < n; y++)
+        for (int x = 0; x < n; x++)
+            if (esp_qrcode_get_module(q, x, y))
+                for (int dy = 0; dy < qr_scale; dy++)
+                    for (int dx = 0; dx < qr_scale; dx++)
+                        px[((y + quiet) * qr_scale + dy) * side + (x + quiet) * qr_scale + dx] = 0x0000;
+    qr_px = px;
+    qr_side = side;
+}
+
+// Draws a QR code for `text` with its top edge at y and its horizontal centre at cx.
+static void draw_qr(const char *text, int scale, int cx, int y)
+{
+    esp_qrcode_config_t qc = { .display_func = qr_render, .max_qrcode_version = 6, .qrcode_ecc_level = ESP_QRCODE_ECC_MED };
+    qr_px = NULL;
+    qr_scale = scale;
+    if (esp_qrcode_generate(&qc, text) == ESP_OK && qr_px) {
+        push(cx - qr_side / 2, y, qr_side, qr_side, qr_px, 0);
+        free(qr_px);
+        qr_px = NULL;
+    }
+}
+
+static void centred_line(int base, const font_t *f, uint16_t c, const char *txt)
+{
+    region_begin(LCD_W, 24);
+    draw_text_c(&sc, f, LCD_W / 2, 18, txt, c);
+    region_end(0, base - 18);
+}
+
+static void draw_portal(void)
+{
+    push(0, 0, LCD_W, LCD_H, NULL, P.bg);
+    centred_line(30, &f_val, P.text, "Set up your clock");
+
+    char wifi[80];
+    snprintf(wifi, sizeof wifi, "WIFI:T:WPA;S:%s;P:%s;;", portal_ssid, portal_pass);
+    draw_qr(wifi, 5, 125, 44);                               // left: join the clock's Wi-Fi network
+    draw_qr("http://192.168.4.1/", 6, 355, 44);              // right: open the setup page (after joining)
+
+    // captions under each code, centred on it
+    region_begin(240, 24);
+    draw_text_c(&sc, &f_date, 120, 18, "1. Scan to join the Wi-Fi", P.text);
+    region_end(5, 228 - 18);
+    region_begin(240, 24);
+    draw_text_c(&sc, &f_date, 120, 18, "2. Then scan to open the page", P.text);
+    region_end(235, 228 - 18);
+
+    char line[96];
+    snprintf(line, sizeof line, "By hand: join %s, password %s, then open 192.168.4.1", portal_ssid, portal_pass);
+    centred_line(256, &f_lbl, P.cond, line);
+
+    // status, wrapped over two lines if it is too wide
+    char st[sizeof portal_status];
+    strlcpy(st, portal_status, sizeof st);
+    char *second = NULL;
+    if (text_w(&f_date, st) > LCD_W - 16) {
+        char *cut = NULL;
+        for (char *c = st; *c; c++) {
+            if (*c == ' ' && c > st) {
+                char keep = *c; *c = 0;
+                int fits = text_w(&f_date, st) <= LCD_W - 16;
+                *c = keep;
+                if (!fits) break;
+                cut = c;
+            }
+        }
+        if (cut) { *cut = 0; second = cut + 1; }
+    }
+    centred_line(second ? 282 : 292, &f_date, P.cond, st);
+    if (second) centred_line(304, &f_date, P.cond, second);
+}
+
 static void ui_task(void *arg)
 {
     face_bg = malloc(DIAL * DIAL * 2);
@@ -537,7 +580,8 @@ static void ui_task(void *arg)
     scratch = malloc(LCD_W * SCRATCH_H * 2);
     assert(face_bg && dial_buf && scratch);
 
-    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0;
+    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0, last_sv = 0, last_pv = -1;
+    bool in_portal = false;
     bool was_synced = false;
     while (1) {
         struct timeval tv;
@@ -546,15 +590,24 @@ static void ui_task(void *arg)
         time_t t = tv.tv_sec;
         struct tm tm;
         localtime_r(&t, &tm);
-        int night = synced && (tm.tm_hour >= NIGHT_START_HOUR || tm.tm_hour < NIGHT_END_HOUR);
+        // no night palette while the time zone is still unknown (the time would be UTC)
+        int night = synced && !settings.tz_needed && (tm.tm_hour >= NIGHT_START_HOUR || tm.tm_hour < NIGHT_END_HOUR);
 
         if (flip_req) {                                  // screen was touched: rotate 180 degrees
             flip_req = false;
             rot ^= 1;
             cmd(0x36, &MADCTL[rot], 1);
             cur_night = -1;                              // forces the full repaint below
+            last_pv = -1;                                // and a repaint of the setup screen
             ESP_LOGI(TAG, "touch: display rotated %s", rot ? "180" : "back to normal");
         }
+        if (portal_active) {                             // the setup page is open: show its screen instead
+            if (!in_portal) { in_portal = true; set_palette(0); last_pv = -1; }
+            if (portal_version != last_pv) { last_pv = portal_version; draw_portal(); }
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
+        if (in_portal) { in_portal = false; cur_night = -1; }
         if (night != cur_night) {                        // palette changed: repaint everything
             cur_night = night;
             set_palette(night);
@@ -568,6 +621,10 @@ static void ui_task(void *arg)
             ESP_LOGI(TAG, "palette: %s", night ? "night (muted red)" : "day");
         }
 
+        if (settings_version != last_sv) {               // place name changed (address looked up)
+            last_sv = settings_version;
+            draw_header();
+        }
         xSemaphoreTake(wx_lock, portMAX_DELAY);
         int wxv = wx_ver;
         xSemaphoreGive(wx_lock);
@@ -614,6 +671,7 @@ static void ui_task(void *arg)
 #define PIN_SDA 7
 #define PIN_SCL 8
 #define FLIP_LOCKOUT_MS 800                  // ignore touches right after a flip
+#define HOLD_MS 5000                         // holding the screen this long opens the setup page
 
 static void touch_task(void *arg)
 {
@@ -636,16 +694,27 @@ static void touch_task(void *arg)
     i2c_master_dev_handle_t dev;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dc, &dev));
 
-    bool was_down = false;
-    int64_t last_flip_ms = -FLIP_LOCKOUT_MS;
+    bool was_down = false, flipped_at_press = false, hold_done = false;
+    int64_t last_flip_ms = -FLIP_LOCKOUT_MS, down_since_ms = 0;
     while (1) {
         uint8_t reg = 0x02, n = 0;                       // register 2 = number of touch points
         if (i2c_master_transmit_receive(dev, &reg, 1, &n, 1, 100) == ESP_OK) {
             bool down = (n & 0x0F) > 0 && (n & 0x0F) < 3;
             int64_t now_ms = esp_timer_get_time() / 1000;
-            if (down && !was_down && now_ms - last_flip_ms >= FLIP_LOCKOUT_MS) {
-                flip_req = true;
-                last_flip_ms = now_ms;
+            if (down && !was_down) {
+                down_since_ms = now_ms;
+                hold_done = false;
+                flipped_at_press = now_ms - last_flip_ms >= FLIP_LOCKOUT_MS;
+                if (flipped_at_press) {
+                    flip_req = true;
+                    last_flip_ms = now_ms;
+                }
+            }
+            if (down && !hold_done && now_ms - down_since_ms >= HOLD_MS) {
+                hold_done = true;
+                if (flipped_at_press) flip_req = true;     // undo the flip this touch started
+                ESP_LOGI(TAG, "touch held: opening the setup page");
+                portal_start(NULL);
             }
             was_down = down;
         }
@@ -656,14 +725,24 @@ static void touch_task(void *arg)
 // ---------------------------------------------------------------------------
 // Wi-Fi, SNTP, weather
 // ---------------------------------------------------------------------------
-static EventGroupHandle_t net_ev;
-#define GOT_IP BIT0
+EventGroupHandle_t net_ev;
+volatile int sta_fail;
+volatile bool sta_retry = true;
+static bool ever_got_ip;
+#define PORTAL_AFTER_MS (3 * 60 * 1000)      // no address this long after power-up: offer the setup page
 
 static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
+        if (sta_retry) esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        sta_fail++;
+        if (!sta_retry) return;                          // the setup page is in charge of the connection
+        if (!ever_got_ip && esp_timer_get_time() / 1000 > PORTAL_AFTER_MS) {
+            ESP_LOGW(TAG, "still no Wi-Fi: opening the setup page");
+            portal_start(NULL);
+            return;
+        }
         ESP_LOGW(TAG, "Wi-Fi disconnected, retrying");
         vTaskDelay(pdMS_TO_TICKS(1000));
         esp_wifi_connect();
@@ -672,21 +751,12 @@ static void on_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         snprintf(ip_str, sizeof ip_str, IPSTR, IP2STR(&e->ip_info.ip));
         ESP_LOGI(TAG, "got IP %s", ip_str);
         net_state = 1;
+        ever_got_ip = true;
         xEventGroupSetBits(net_ev, GOT_IP);
     }
 }
 
 static char wbuf[2048];
-static int wlen;
-
-static esp_err_t http_ev(esp_http_client_event_t *e)
-{
-    if (e->event_id == HTTP_EVENT_ON_DATA && wlen + e->data_len < (int)sizeof(wbuf) - 1) {
-        memcpy(wbuf + wlen, e->data, e->data_len);
-        wlen += e->data_len;
-    }
-    return ESP_OK;
-}
 
 static bool fetch_weather(void)
 {
@@ -697,20 +767,7 @@ static bool fetch_weather(void)
         "wind_speed_10m,wind_direction_10m,is_day"
         "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto",
         settings.lat, settings.lon);
-    wlen = 0;
-    esp_http_client_config_t cfg = {
-        .url = url, .event_handler = http_ev, .timeout_ms = 15000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-    esp_http_client_handle_t c = esp_http_client_init(&cfg);
-    esp_err_t err = esp_http_client_perform(c);
-    int status = esp_http_client_get_status_code(c);
-    esp_http_client_cleanup(c);
-    if (err != ESP_OK || status != 200) {
-        ESP_LOGW(TAG, "weather request failed: %s, HTTP %d", esp_err_to_name(err), status);
-        return false;
-    }
-    wbuf[wlen] = 0;
+    if (!http_get_text(url, wbuf, sizeof wbuf)) return false;
     cJSON *root = cJSON_Parse(wbuf);
     cJSON *cur = root ? cJSON_GetObjectItem(root, "current") : NULL;
     if (!cur) { ESP_LOGW(TAG, "weather JSON unusable"); cJSON_Delete(root); return false; }
@@ -723,6 +780,8 @@ static bool fetch_weather(void)
         .wdir = cJSON_GetObjectItem(cur, "wind_direction_10m")->valueint,
         .stamp_s = esp_timer_get_time() / 1000000,
     };
+    cJSON *zone = cJSON_GetObjectItem(root, "timezone");     // e.g. "America/Los_Angeles"
+    if (settings.tz_needed && cJSON_IsString(zone)) apply_timezone_name(zone->valuestring);
     cJSON_Delete(root);
     xSemaphoreTake(wx_lock, portMAX_DELAY);
     wx = n;
@@ -736,8 +795,26 @@ static bool fetch_weather(void)
 static void net_task(void *arg)
 {
     xEventGroupWaitBits(net_ev, GOT_IP, pdFALSE, pdFALSE, portMAX_DELAY);
+    // An address that arrives while the setup page is open is its connection test, with the
+    // placeholder location still in place. The setup page saves the real settings and restarts.
+    if (portal_active) vTaskDelay(portMAX_DELAY);
     esp_sntp_config_t sc_cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
     ESP_ERROR_CHECK(esp_netif_sntp_init(&sc_cfg));
+    while (settings.pending[0]) {
+        int r = resolve_address(settings.pending);
+        if (r == 1) {
+            ESP_LOGI(TAG, "address found: '%s' (%s, %s)", settings.label, settings.lat, settings.lon);
+            settings.pending[0] = 0;
+            save_settings();
+            break;
+        }
+        if (r == 0) {                                    // the geocoder does not know it: ask for another
+            ESP_LOGW(TAG, "address not found: '%s'", settings.pending);
+            portal_start("Place not found. Use a street address, a city, a ZIP code, or latitude, longitude.");
+            vTaskDelay(portMAX_DELAY);
+        }
+        vTaskDelay(pdMS_TO_TICKS(30 * 1000));            // network trouble: try again
+    }
     while (1) {
         bool ok = fetch_weather();
         vTaskDelay(pdMS_TO_TICKS((ok ? WEATHER_EVERY_S : 60) * 1000));
@@ -765,16 +842,19 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();          // the setup network (portal.c)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL));
+    sta_retry = settings.configured;                     // no Wi-Fi settings yet: the setup page runs instead
     wifi_config_t wc = { 0 };
     strlcpy((char *)wc.sta.ssid, settings.ssid, sizeof(wc.sta.ssid));
     strlcpy((char *)wc.sta.password, settings.pass, sizeof(wc.sta.password));
     wc.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(settings.configured ? WIFI_MODE_STA : WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));
     ESP_ERROR_CHECK(esp_wifi_start());
+    if (!settings.configured) portal_start(NULL);
     xTaskCreate(net_task, "net", 10240, NULL, 4, NULL);
 }
