@@ -1,0 +1,7 @@
+# Never publish these: the firmware contains Segoe UI glyph data, which Microsoft does not
+# allow redistributing. Hand the .exe only to people you give it to personally.
+.venv/
+build/
+dist/
+firmware/
+__pycache__/

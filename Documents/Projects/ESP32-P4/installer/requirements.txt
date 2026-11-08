@@ -1,0 +1,5 @@
+# Build-time packages for installer.py and the .exe (pinned to what ESP-IDF 5.5.6 ships).
+esptool==4.13.0
+pyserial==3.5
+certifi
+pyinstaller

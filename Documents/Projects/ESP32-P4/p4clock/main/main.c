@@ -30,9 +30,55 @@
 #include "nvs_flash.h"
 #include "cJSON.h"
 #include "font.h"
+#include "esp_partition.h"
+#ifdef P4CLOCK_INSTALLER_BUILD
+#include "installer_defaults.h"   // placeholders; the installer writes the real settings
+#else
 #include "user_config.h"        // Wi-Fi, location, time zone: copy from user_config.h.example
+#endif
 
 static const char *TAG = "p4clock";
+
+// ---------------------------------------------------------------------------
+// Settings: the compile-time defaults from user_config.h, overridden by a JSON
+// block in the "config" flash partition when the installer wrote one.
+// ---------------------------------------------------------------------------
+static struct {
+    char ssid[33], pass[65], label[40], lat[16], lon[16], tz[64];
+} settings;
+
+static void settings_set(char *dst, size_t n, cJSON *json, const char *key)
+{
+    cJSON *v = cJSON_GetObjectItem(json, key);
+    if (cJSON_IsString(v) && v->valuestring[0]) strlcpy(dst, v->valuestring, n);
+}
+
+static void load_settings(void)
+{
+    strlcpy(settings.ssid, WIFI_SSID, sizeof settings.ssid);
+    strlcpy(settings.pass, WIFI_PASS, sizeof settings.pass);
+    strlcpy(settings.label, LOCATION_LABEL, sizeof settings.label);
+    strlcpy(settings.lat, LAT, sizeof settings.lat);
+    strlcpy(settings.lon, LON, sizeof settings.lon);
+    strlcpy(settings.tz, TZ_POSIX, sizeof settings.tz);
+
+    const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "config");
+    if (!p) return;
+    static char buf[1024];
+    if (esp_partition_read(p, 0, buf, sizeof buf - 1) != ESP_OK) return;
+    buf[sizeof buf - 1] = 0;
+    if (buf[0] != '{') return;                           // erased flash reads 0xFF: keep the defaults
+    cJSON *json = cJSON_Parse(buf);
+    if (!json) { ESP_LOGW(TAG, "config partition is not valid JSON; using the built-in settings"); return; }
+    settings_set(settings.ssid, sizeof settings.ssid, json, "ssid");
+    settings_set(settings.pass, sizeof settings.pass, json, "pass");
+    settings_set(settings.label, sizeof settings.label, json, "label");
+    settings_set(settings.lat, sizeof settings.lat, json, "lat");
+    settings_set(settings.lon, sizeof settings.lon, json, "lon");
+    settings_set(settings.tz, sizeof settings.tz, json, "tz");
+    cJSON_Delete(json);
+    ESP_LOGI(TAG, "settings from the config partition: network '%s', place '%s'", settings.ssid, settings.label);
+}
 
 #define NIGHT_START_HOUR 22
 #define NIGHT_END_HOUR 7
@@ -388,7 +434,10 @@ static const char *compass(int deg)
 static void draw_header(void)
 {
     region_begin(RW, 20);
-    draw_text_c(&sc, &f_lbl, RW / 2, 14, LOCATION_LABEL, P.loc);
+    char lbl[sizeof settings.label];
+    strlcpy(lbl, settings.label, sizeof lbl);
+    while (lbl[0] && text_w(&f_lbl, lbl) > RW - 8) lbl[strlen(lbl) - 1] = 0;   // keep it inside the column
+    draw_text_c(&sc, &f_lbl, RW / 2, 14, lbl, P.loc);
     region_end(RX, HDR_Y);
 }
 
@@ -641,11 +690,13 @@ static esp_err_t http_ev(esp_http_client_event_t *e)
 
 static bool fetch_weather(void)
 {
-    static const char url[] =
-        "https://api.open-meteo.com/v1/forecast?latitude=" LAT "&longitude=" LON
+    char url[320];
+    snprintf(url, sizeof url,
+        "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
         "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,"
         "wind_speed_10m,wind_direction_10m,is_day"
-        "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto";
+        "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto",
+        settings.lat, settings.lon);
     wlen = 0;
     esp_http_client_config_t cfg = {
         .url = url, .event_handler = http_ev, .timeout_ms = 15000,
@@ -696,7 +747,8 @@ static void net_task(void *arg)
 void app_main(void)
 {
     printf("\n=== p4clock start ===\n");
-    setenv("TZ", TZ_POSIX, 1);
+    load_settings();
+    setenv("TZ", settings.tz, 1);
     tzset();
     wx_lock = xSemaphoreCreateMutex();
     lcd_init();
@@ -718,8 +770,8 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, on_event, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_event, NULL));
     wifi_config_t wc = { 0 };
-    strlcpy((char *)wc.sta.ssid, WIFI_SSID, sizeof(wc.sta.ssid));
-    strlcpy((char *)wc.sta.password, WIFI_PASS, sizeof(wc.sta.password));
+    strlcpy((char *)wc.sta.ssid, settings.ssid, sizeof(wc.sta.ssid));
+    strlcpy((char *)wc.sta.password, settings.pass, sizeof(wc.sta.password));
     wc.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wc));

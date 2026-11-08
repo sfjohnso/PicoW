@@ -263,3 +263,14 @@
 !Documents/Projects/ESP32-P4/p4clock/main/user_config.h.example
 !Documents/Projects/ESP32-P4/p4clock/tools/
 !Documents/Projects/ESP32-P4/p4clock/tools/gen_fonts.py
+!Documents/Projects/ESP32-P4/p4clock/partitions.csv
+!Documents/Projects/ESP32-P4/p4clock/main/installer_defaults.h
+
+# --- P4 clock installer source (Documents/Projects/ESP32-P4/installer); NOT .venv, build, dist or firmware ---
+!Documents/Projects/ESP32-P4/installer/
+!Documents/Projects/ESP32-P4/installer/.gitignore
+!Documents/Projects/ESP32-P4/installer/README.md
+!Documents/Projects/ESP32-P4/installer/installer.py
+!Documents/Projects/ESP32-P4/installer/package.ps1
+!Documents/Projects/ESP32-P4/installer/check_no_secrets.py
+!Documents/Projects/ESP32-P4/installer/requirements.txt
