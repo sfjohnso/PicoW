@@ -2,4 +2,5 @@
 esptool==4.13.0
 pyserial==3.5
 certifi
+tzdata
 pyinstaller

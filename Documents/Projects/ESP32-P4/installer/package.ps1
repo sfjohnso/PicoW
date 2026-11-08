@@ -27,7 +27,7 @@ if ($LASTEXITCODE -ne 0) { throw 'secret check failed: firmware contains real se
 
 # 4. One-file Windows program with the firmware inside.
 & (Join-Path $here '.venv\Scripts\pyinstaller.exe') --noconfirm --clean --onefile --windowed `
-    --name P4ClockInstaller --collect-all esptool --add-data "$fw;firmware" `
+    --name P4ClockInstaller --collect-all esptool --collect-data tzdata --add-data "$fw;firmware" `
     --distpath (Join-Path $here 'dist') --workpath (Join-Path $here 'build') --specpath (Join-Path $here 'build') `
     (Join-Path $here 'installer.py')
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
