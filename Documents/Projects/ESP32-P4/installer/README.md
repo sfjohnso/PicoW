@@ -56,6 +56,9 @@ the clock can join it. The page is plain HTTP on that private network.
 - **The clock shows temperatures in degrees Fahrenheit and wind in mph everywhere.** There is
   no metric option yet.
 - The clock starts by itself every time the board is reset or powered up.
+- **Night mode uses the board's camera as a light sensor:** in a dark room the colors turn muted red and
+  the backlight dims. Stand the clock so the camera on its back sees the room, not a wall right behind it
+  (about 6 inches / 15 cm away worked). No picture is taken. Without a working camera it uses 22:00 to 07:00.
 - The installer itself accepts a U.S. street address or coordinates. The clock's own setup page
   also accepts a city or ZIP code.
 

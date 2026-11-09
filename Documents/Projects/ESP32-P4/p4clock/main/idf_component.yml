@@ -17,3 +17,4 @@ dependencies:
   espressif/esp_wifi_remote: '*'
   espressif/esp_hosted: 2.0.17     # matches the older ESP32-C6 firmware shipped on the board
   espressif/qrcode: '*'
+  espressif/esp_cam_sensor: '0.9.0'   # the camera's sensor driver (ambient light)

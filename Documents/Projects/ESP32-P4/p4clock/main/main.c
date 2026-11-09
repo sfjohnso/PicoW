@@ -15,6 +15,7 @@
 #include "freertos/event_groups.h"
 #include "freertos/semphr.h"
 #include "driver/gpio.h"
+#include "driver/ledc.h"
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "esp_lcd_panel_io.h"
@@ -32,6 +33,7 @@
 #include "font.h"
 #include "settings.h"
 #include "portal.h"
+#include "ambient.h"
 #include "qrcode.h"
 
 static const char *TAG = "p4clock";
@@ -97,11 +99,43 @@ static void push(int x, int y, int w, int h, const uint16_t *src, uint16_t color
     }
 }
 
+// ---------------------------------------------------------------------------
+// Backlight: PWM on the N-FET gate (5 kHz, 10 bit). Dimmed at night.
+// ---------------------------------------------------------------------------
+#define NIGHT_BACKLIGHT_PCT 8                // brightness in a dark room (percent of full)
+#define BL_FADE_MS 1500                      // fade time between day and night levels
+#define BL_MODE LEDC_LOW_SPEED_MODE
+#define BL_CHANNEL LEDC_CHANNEL_0
+
+static void backlight_init(void)
+{
+    ledc_timer_config_t t = { .speed_mode = BL_MODE, .duty_resolution = LEDC_TIMER_10_BIT, .timer_num = LEDC_TIMER_0,
+                              .freq_hz = 5000, .clk_cfg = LEDC_AUTO_CLK };
+    ESP_ERROR_CHECK(ledc_timer_config(&t));
+    ledc_channel_config_t c = { .gpio_num = PIN_LCD_BL, .speed_mode = BL_MODE, .channel = BL_CHANNEL,
+                                .timer_sel = LEDC_TIMER_0, .duty = 0, .hpoint = 0 };
+    ESP_ERROR_CHECK(ledc_channel_config(&c));
+    ledc_fade_func_install(0);
+}
+
+static void backlight_set(int percent, int fade_ms)
+{
+    uint32_t duty = 1023u * percent / 100;
+    ledc_fade_stop(BL_MODE, BL_CHANNEL);
+    if (fade_ms > 0) {
+        ledc_set_fade_with_time(BL_MODE, BL_CHANNEL, duty, fade_ms);
+        ledc_fade_start(BL_MODE, BL_CHANNEL, LEDC_FADE_NO_WAIT);
+    } else {
+        ledc_set_duty(BL_MODE, BL_CHANNEL, duty);
+        ledc_update_duty(BL_MODE, BL_CHANNEL);
+    }
+}
+
 static void lcd_init(void)
 {
-    gpio_config_t o = { .pin_bit_mask = (1ULL << PIN_LCD_RST) | (1ULL << PIN_LCD_BL), .mode = GPIO_MODE_OUTPUT };
+    gpio_config_t o = { .pin_bit_mask = (1ULL << PIN_LCD_RST), .mode = GPIO_MODE_OUTPUT };
     gpio_config(&o);
-    gpio_set_level(PIN_LCD_BL, 0);
+    backlight_init();                        // off until the panel is initialised
     gpio_set_level(PIN_LCD_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(20));
     gpio_set_level(PIN_LCD_RST, 1);
@@ -138,7 +172,7 @@ static void lcd_init(void)
     cmd(0x29, NULL, 0);
     vTaskDelay(pdMS_TO_TICKS(50));
     push(0, 0, LCD_W, LCD_H, NULL, 0);
-    gpio_set_level(PIN_LCD_BL, 1);
+    backlight_set(NIGHT_BACKLIGHT_PCT, 0);   // start dim: a bright flash at night is worse than a dim second by day
 }
 
 // ---------------------------------------------------------------------------
@@ -160,7 +194,7 @@ static uint16_t mk(uint32_t rgb, bool night)
     int r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
     if (!night) return rgb565(r, g, b);
     int y = (299 * r + 587 * g + 114 * b) / 1000;     // brightness
-    return rgb565(y * 60 / 100, y * 6 / 100, y * 6 / 100);
+    return rgb565(y * 75 / 100, y * 15 / 200, y * 15 / 200);      // muted red at 75% of the day brightness
 }
 
 static void set_palette(bool n)
@@ -171,7 +205,7 @@ static void set_palette(bool n)
     P.date  = mk(0xaebbd6, n);  P.tz    = mk(0x7f8db0, n);  P.tbg   = mk(0x0e1422, n);
     P.tedge = mk(0x232d44, n);  P.label = mk(0x7f8db0, n);  P.cond  = mk(0xcfe0ff, n);
     P.foot  = mk(0x8795bb, n);
-    P.sec   = n ? rgb565(170, 24, 24) : rgb565(0xff, 0x6b, 0x6b);   // keep the second hand visible
+    P.sec   = n ? rgb565(212, 30, 30) : rgb565(0xff, 0x6b, 0x6b);   // keep the second hand visible
 }
 
 // ---------------------------------------------------------------------------
@@ -580,7 +614,7 @@ static void ui_task(void *arg)
     scratch = malloc(LCD_W * SCRATCH_H * 2);
     assert(face_bg && dial_buf && scratch);
 
-    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0, last_sv = 0, last_pv = -1;
+    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0, last_sv = 0, last_pv = -1, cur_bl = -1;
     bool in_portal = false;
     bool was_synced = false;
     while (1) {
@@ -590,8 +624,13 @@ static void ui_task(void *arg)
         time_t t = tv.tv_sec;
         struct tm tm;
         localtime_r(&t, &tm);
-        // no night palette while the time zone is still unknown (the time would be UTC)
-        int night = synced && !settings.tz_needed && (tm.tm_hour >= NIGHT_START_HOUR || tm.tm_hour < NIGHT_END_HOUR);
+        // Dark red when the room is dark, judged by the camera. Without a working camera: by the time of day
+        // (and not while the time zone is still unknown, when the time would be UTC).
+        int night;
+        if (ambient_state == AMBIENT_DAY || ambient_state == AMBIENT_NIGHT) night = ambient_state == AMBIENT_NIGHT;
+        else if (ambient_state == AMBIENT_UNAVAILABLE)
+            night = synced && !settings.tz_needed && (tm.tm_hour >= NIGHT_START_HOUR || tm.tm_hour < NIGHT_END_HOUR);
+        else night = 0;                                  // the camera has not been read yet
 
         if (flip_req) {                                  // screen was touched: rotate 180 degrees
             flip_req = false;
@@ -602,12 +641,15 @@ static void ui_task(void *arg)
             ESP_LOGI(TAG, "touch: display rotated %s", rot ? "180" : "back to normal");
         }
         if (portal_active) {                             // the setup page is open: show its screen instead
-            if (!in_portal) { in_portal = true; set_palette(0); last_pv = -1; }
+            if (!in_portal) { in_portal = true; set_palette(0); last_pv = -1; backlight_set(100, 0); cur_bl = 100; }
             if (portal_version != last_pv) { last_pv = portal_version; draw_portal(); }
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
         }
-        if (in_portal) { in_portal = false; cur_night = -1; }
+        if (in_portal) { in_portal = false; cur_night = -1; cur_bl = -1; }
+        // The backlight follows the room too: dim at night, and also until the camera's first reading.
+        int want_bl = (night || ambient_state == AMBIENT_UNKNOWN) ? NIGHT_BACKLIGHT_PCT : 100;
+        if (want_bl != cur_bl) { cur_bl = want_bl; backlight_set(want_bl, BL_FADE_MS); }
         if (night != cur_night) {                        // palette changed: repaint everything
             cur_night = night;
             set_palette(night);
@@ -670,6 +712,7 @@ static void ui_task(void *arg)
 #define PIN_TP_RST 29
 #define PIN_SDA 7
 #define PIN_SCL 8
+static i2c_master_bus_handle_t i2c_bus;       // shared by the touch chip and the camera (created in app_main)
 #define FLIP_LOCKOUT_MS 800                  // ignore touches right after a flip
 #define HOLD_MS 5000                         // holding the screen this long opens the setup page
 
@@ -682,17 +725,10 @@ static void touch_task(void *arg)
     gpio_set_level(PIN_TP_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(300));
 
-    i2c_master_bus_config_t bc = {
-        .i2c_port = I2C_NUM_0, .sda_io_num = PIN_SDA, .scl_io_num = PIN_SCL,
-        .clk_source = I2C_CLK_SRC_DEFAULT, .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = true,
-    };
-    i2c_master_bus_handle_t bus;
-    ESP_ERROR_CHECK(i2c_new_master_bus(&bc, &bus));
     i2c_device_config_t dc = { .dev_addr_length = I2C_ADDR_BIT_LEN_7, .device_address = 0x38,
                                .scl_speed_hz = 400000 };
     i2c_master_dev_handle_t dev;
-    ESP_ERROR_CHECK(i2c_master_bus_add_device(bus, &dc, &dev));
+    ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus, &dc, &dev));
 
     bool was_down = false, flipped_at_press = false, hold_done = false;
     int64_t last_flip_ms = -FLIP_LOCKOUT_MS, down_since_ms = 0;
@@ -829,8 +865,15 @@ void app_main(void)
     tzset();
     wx_lock = xSemaphoreCreateMutex();
     lcd_init();
+    i2c_master_bus_config_t bc = {
+        .i2c_port = I2C_NUM_0, .sda_io_num = PIN_SDA, .scl_io_num = PIN_SCL,
+        .clk_source = I2C_CLK_SRC_DEFAULT, .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    ESP_ERROR_CHECK(i2c_new_master_bus(&bc, &i2c_bus));
     xTaskCreate(ui_task, "ui", 8192, NULL, 5, NULL);
     xTaskCreate(touch_task, "touch", 4096, NULL, 4, NULL);
+    ambient_start(i2c_bus);                              // the camera as a light sensor (palette: dark in a dark room)
 
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) {
