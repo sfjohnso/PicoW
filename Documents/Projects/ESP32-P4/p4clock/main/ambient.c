@@ -42,12 +42,12 @@ static void wr(uint16_t reg, uint8_t val)
 static void tune_sensor(void)
 {
     static const struct { uint16_t reg; uint8_t val; } t[] = {
-        { 0x380E, 0x10 }, { 0x380F, 0x68 },                      // frame length 4200 lines (about 12 frames a second)
+        { 0x380E, 0x41 }, { 0x380F, 0xA0 },                      // frame length 16800 lines (about 3 frames a second)
         { 0x3A00, 0x58 },                                        // banding filter off
         { 0x3A02, 0xFF }, { 0x3A03, 0xF0 }, { 0x3A14, 0xFF }, { 0x3A15, 0xF0 },   // exposure ceiling: 16-bit maximum
         { 0x3A18, 0x03 }, { 0x3A19, 0xFF },                      // gain ceiling 63.9x
         { 0x3503, 0x01 },                                        // exposure manual, gain automatic
-        { 0x3500, 0x00 }, { 0x3501, 0xF3 }, { 0x3502, 0xC0 },    // exposure 62400 (1/16 line), about 80 ms
+        { 0x3500, 0x03 }, { 0x3501, 0xCF }, { 0x3502, 0x00 },    // exposure 249600 (1/16 line), about 310 ms: 4x the old 80 ms, so a dim scene needs 2 stops less gain
         { 0x3A0F, 25 }, { 0x3A10, 22 }, { 0x3A1B, 25 }, { 0x3A1E, 22 }, { 0x3A11, 50 }, { 0x3A1F, 11 },   // aim for a dark picture
     };
     for (unsigned i = 0; i < sizeof t / sizeof t[0]; i++) wr(t[i].reg, t[i].val);
@@ -80,7 +80,7 @@ static void ambient_task(void *arg)
         vTaskDelete(NULL);
     }
     tune_sensor();
-    vTaskDelay(pdMS_TO_TICKS(4000));                            // let the automatic gain settle
+    vTaskDelay(pdMS_TO_TICKS(10000));                           // let the automatic gain settle (slower frames now)
 
     float ring[AVERAGE_OF];
     int n = 0, next = 0, ticks = 0;

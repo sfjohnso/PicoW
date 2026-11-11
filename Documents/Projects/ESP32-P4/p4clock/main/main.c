@@ -102,7 +102,7 @@ static void push(int x, int y, int w, int h, const uint16_t *src, uint16_t color
 // ---------------------------------------------------------------------------
 // Backlight: PWM on the N-FET gate (5 kHz, 10 bit). Dimmed at night.
 // ---------------------------------------------------------------------------
-#define NIGHT_BACKLIGHT_PCT 8                // brightness in a dark room (percent of full)
+#define NIGHT_BACKLIGHT_PCT 25               // brightness in a dark room (percent of full)
 #define BL_FADE_MS 1500                      // fade time between day and night levels
 #define BL_MODE LEDC_LOW_SPEED_MODE
 #define BL_CHANNEL LEDC_CHANNEL_0
@@ -194,7 +194,7 @@ static uint16_t mk(uint32_t rgb, bool night)
     int r = (rgb >> 16) & 255, g = (rgb >> 8) & 255, b = rgb & 255;
     if (!night) return rgb565(r, g, b);
     int y = (299 * r + 587 * g + 114 * b) / 1000;     // brightness
-    return rgb565(y * 75 / 100, y * 15 / 200, y * 15 / 200);      // muted red at 75% of the day brightness
+    return rgb565(y * 94 / 100, y * 19 / 200, y * 19 / 200);      // muted red at 94% of the day brightness
 }
 
 static void set_palette(bool n)
@@ -205,7 +205,7 @@ static void set_palette(bool n)
     P.date  = mk(0xaebbd6, n);  P.tz    = mk(0x7f8db0, n);  P.tbg   = mk(0x0e1422, n);
     P.tedge = mk(0x232d44, n);  P.label = mk(0x7f8db0, n);  P.cond  = mk(0xcfe0ff, n);
     P.foot  = mk(0x8795bb, n);
-    P.sec   = n ? rgb565(212, 30, 30) : rgb565(0xff, 0x6b, 0x6b);   // keep the second hand visible
+    P.sec   = n ? rgb565(255, 37, 37) : rgb565(0xff, 0x6b, 0x6b);   // keep the second hand visible
 }
 
 // ---------------------------------------------------------------------------
