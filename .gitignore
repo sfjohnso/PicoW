@@ -294,3 +294,15 @@
 !Documents/Projects/ESP32-P4/launcher/main/main.c
 !Documents/Projects/ESP32-P4/launcher/main/font_8x16.c
 !Documents/Projects/ESP32-P4/launcher/main/font_8x16.h
+
+# --- P4 photo slideshow app (Documents/Projects/ESP32-P4/photos): source only. NOT build/, sdkconfig, dependencies.lock, managed_components/, components/fatfs, testimages/ ---
+!Documents/Projects/ESP32-P4/photos/
+!Documents/Projects/ESP32-P4/photos/CMakeLists.txt
+!Documents/Projects/ESP32-P4/photos/partitions.csv
+!Documents/Projects/ESP32-P4/photos/sdkconfig.defaults
+!Documents/Projects/ESP32-P4/photos/main/
+!Documents/Projects/ESP32-P4/photos/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/photos/main/idf_component.yml
+!Documents/Projects/ESP32-P4/photos/main/main.c
+!Documents/Projects/ESP32-P4/photos/main/font_8x16.c
+!Documents/Projects/ESP32-P4/photos/main/font_8x16.h
