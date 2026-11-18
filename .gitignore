@@ -282,3 +282,15 @@
 !Documents/Projects/ESP32-P4/installer/package.ps1
 !Documents/Projects/ESP32-P4/installer/check_no_secrets.py
 !Documents/Projects/ESP32-P4/installer/requirements.txt
+
+# --- P4 launcher (Documents/Projects/ESP32-P4/launcher): source only. NOT build/, sdkconfig, components/fatfs (copy of IDF's, see README) ---
+!Documents/Projects/ESP32-P4/launcher/
+!Documents/Projects/ESP32-P4/launcher/CMakeLists.txt
+!Documents/Projects/ESP32-P4/launcher/README.md
+!Documents/Projects/ESP32-P4/launcher/partitions.csv
+!Documents/Projects/ESP32-P4/launcher/sdkconfig.defaults
+!Documents/Projects/ESP32-P4/launcher/main/
+!Documents/Projects/ESP32-P4/launcher/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/launcher/main/main.c
+!Documents/Projects/ESP32-P4/launcher/main/font_8x16.c
+!Documents/Projects/ESP32-P4/launcher/main/font_8x16.h
