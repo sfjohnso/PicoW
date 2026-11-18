@@ -1,0 +1,13 @@
+# Launcher layout. The first four rows keep the standalone clock's offsets (config stays at 0x187000).
+# factory = this launcher (booted whenever no app has been chosen: power-up, Reset, crash)
+# ota_0   = the built-in clock, flashed once and never rewritten
+# ota_1   = scratch slot: the launcher copies a chosen /apps/*.bin from the SD card here
+# Apps never mark themselves valid, so with app rollback enabled each launch is one-shot: the next reset returns here.
+# Name,   Type, SubType, Offset,   Size
+nvs,      data, nvs,     0x9000,   0x6000
+phy_init, data, phy,     0xf000,   0x1000
+factory,  app,  factory, 0x10000,  0x177000
+config,   data, 0x40,    0x187000, 0x1000
+otadata,  data, ota,     0x188000, 0x2000
+ota_0,    app,  ota_0,   0x190000, 0x200000
+ota_1,    app,  ota_1,   0x390000, 0x800000
