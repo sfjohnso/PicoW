@@ -44,6 +44,7 @@ Do not write `config` (0x187000): it holds the clock's settings. Later launcher-
 * `../quake`     Quake port, `TOUCH_CONTROLS 0` = attract-mode demo only (own git repo)
 * `../photos`    slideshow of `/Photos` (JPEG by the P4 hardware decoder, PNG by libpng)
 * `../music`     album player for `/Music` (minimp3, ES8311 codec)
+* `../life`      Conway's Game of Life: five start modes, cells coloured by born / surviving / just died (no SD files needed)
 
 Each builds like any IDF project (`idf.py set-target esp32p4 && idf.py build`); copy its `build/<name>.bin` to
 `/apps/` on the card. Quake also needs `/id1/PAK0.PAK` (+ `PAK1.PAK`).

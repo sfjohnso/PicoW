@@ -2,7 +2,7 @@
 
 A Windows program that sets up a Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 from scratch: the **launcher** (a touch
 menu that starts apps from the SD card), the **clock and weather display**, and an SD card with the apps
-(**Quake Demo, Photos, Music**). It walks through five steps and finishes by testing the board.
+(**Quake Demo, Photos, Music, Life**). It walks through five steps and finishes by testing the board.
 
 ## Using it (for the person receiving the .exe)
 
@@ -143,7 +143,7 @@ cannot parse, so it is rewritten (a one-hour shift of the March changeover on a 
 ## Building the installer (maintainer)
 
 Needs ESP-IDF 5.5.6 at `C:\Espressif`, the `p4clock` project with its `font_data.c`
-(generated from Segoe UI on a Windows PC), the `launcher`, `photos`, `music` and `quake` projects (each configured
+(generated from Segoe UI on a Windows PC), the `launcher`, `photos`, `music`, `life` and `quake` projects (each configured
 once with `idf.py set-target esp32p4`), and a Python 3 with tkinter:
 
     python -m venv .venv
@@ -152,7 +152,7 @@ once with `idf.py set-target esp32p4`), and a Python 3 with tkinter:
 
 `package.ps1` builds the clock with **placeholder** settings (`installer_defaults.h`) and the other four projects,
 copies the launcher's bootloader, partition table, `launcher.bin`, `ota_data_initial.bin` and the clock into
-`firmware\` and the three apps into `apps\` (as `Quake Demo.bin`, `Photos.bin`, `Music.bin`), runs
+`firmware\` and the four apps into `apps\` (as `Quake Demo.bin`, `Photos.bin`, `Music.bin`, `Life.bin`), runs
 `check_no_secrets.py` on both folders (it fails if your real Wi-Fi name or password from `user_config.h` is inside
 the binaries) and then makes `dist\P4ClockInstaller.exe` with PyInstaller. PyInstaller cannot overwrite an `.exe`
 that is running; close it first.

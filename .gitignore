@@ -309,6 +309,17 @@
 !Documents/Projects/ESP32-P4/photos/main/font_8x16.c
 !Documents/Projects/ESP32-P4/photos/main/font_8x16.h
 
+# --- P4 Game of Life app (Documents/Projects/ESP32-P4/life): source only. NOT build/, sdkconfig ---
+!Documents/Projects/ESP32-P4/life/
+!Documents/Projects/ESP32-P4/life/CMakeLists.txt
+!Documents/Projects/ESP32-P4/life/partitions.csv
+!Documents/Projects/ESP32-P4/life/sdkconfig.defaults
+!Documents/Projects/ESP32-P4/life/main/
+!Documents/Projects/ESP32-P4/life/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/life/main/main.c
+!Documents/Projects/ESP32-P4/life/main/font_8x16.c
+!Documents/Projects/ESP32-P4/life/main/font_8x16.h
+
 # --- P4 music player app (Documents/Projects/ESP32-P4/music): source only. NOT build/, sdkconfig, components/fatfs ---
 !Documents/Projects/ESP32-P4/music/
 !Documents/Projects/ESP32-P4/music/CMakeLists.txt
