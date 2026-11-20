@@ -6,6 +6,7 @@
 //
 // Wi-Fi: esp_wifi_remote -> SDIO -> ESP32-C6.  Time: SNTP.  Weather: Open-Meteo over HTTPS.
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <sys/time.h>
@@ -34,6 +35,7 @@
 #include "settings.h"
 #include "portal.h"
 #include "ambient.h"
+#include "alarm.h"
 #include "qrcode.h"
 
 static const char *TAG = "p4clock";
@@ -61,6 +63,11 @@ static uint16_t *bounce;
 static const uint8_t MADCTL[2] = { 0x28, 0xE8 };   // landscape, and the same rotated 180 degrees
 static int rot;                                    // 0/1: index into MADCTL
 static volatile bool flip_req;                     // set by touch_task, handled by ui_task
+enum { UI_CLOCK, UI_SET, UI_RING };
+static volatile int ui_mode;                       // which screen ui_task shows (touch_task reads it)
+static volatile bool t_down;                       // the current touch in screen coordinates (touch_task writes)
+static volatile int t_x, t_y;
+static volatile uint32_t t_seq;                    // counts new touches
 
 static bool on_done(esp_lcd_panel_io_handle_t io, esp_lcd_panel_io_event_data_t *e, void *u)
 {
@@ -333,7 +340,7 @@ static void rrect(surf_t *s, int x, int y, int w, int h, float r, uint16_t c)
 #define TILE_H 50
 #define FOOT_Y 298
 #define FOOT_H 18
-#define SCRATCH_H 62
+#define SCRATCH_H 70
 
 static uint16_t *face_bg, *dial_buf, *scratch;
 static surf_t sc;                         // scratch region currently being drawn
@@ -421,13 +428,32 @@ static const char *compass(int deg)
 // ---------------------------------------------------------------------------
 // UI blocks
 // ---------------------------------------------------------------------------
+// Alarm bell, 18 px wide and 19 px tall, top-left at (x0, y0): solid when the alarm is on, outline when off.
+static void bell_shape(int x0, int y0, int g, uint16_t c)       // g > 0 shrinks the shape (for the hollow inside)
+{
+    int cx = x0 + 9;
+    aa_disc(&sc, cx, y0 + 7, 6 - g, c);                         // dome
+    rrect(&sc, cx - 6 + g, y0 + 7, 12 - 2 * g, 6 - g, 1, c);    // body
+    if (!g) rrect(&sc, cx - 9, y0 + 12, 18, 3, 1.5f, c);        // lip
+}
+
+static void draw_bell(int x0, int y0, bool on)
+{
+    uint16_t c = on ? P.text : P.label;
+    aa_disc(&sc, x0 + 9, y0 + 1.5f, 1.5f, c);                   // knob
+    bell_shape(x0, y0, 0, c);
+    if (!on) bell_shape(x0, y0, 2, P.bg);                       // hollow it out; the lip stays a solid line
+    aa_disc(&sc, x0 + 9, y0 + 17, 2, c);                        // clapper
+}
+
 static void draw_header(void)
 {
     region_begin(RW, 20);
     char lbl[sizeof settings.label];
     strlcpy(lbl, settings.label, sizeof lbl);
-    while (lbl[0] && text_w(&f_lbl, lbl) > RW - 8) lbl[strlen(lbl) - 1] = 0;   // keep it inside the column
+    while (lbl[0] && text_w(&f_lbl, lbl) > RW - 64) lbl[strlen(lbl) - 1] = 0;  // keep it inside the column, clear of the bell
     draw_text_c(&sc, &f_lbl, RW / 2, 14, lbl, P.loc);
+    draw_bell(RW - 20, 0, settings.alarm_on);
     region_end(RX, HDR_Y);
 }
 
@@ -504,17 +530,40 @@ static void draw_weather(void)
     }
 }
 
+static void fmt12(char *b, size_t n, int hour, int min)
+{
+    snprintf(b, n, "%d:%02d %s", hour % 12 ? hour % 12 : 12, min, hour < 12 ? "AM" : "PM");
+}
+
+static void alarm_text(char *b, size_t n)
+{
+    char t[32];
+    if (alarm_state == ALARM_SNOOZED) {
+        time_t u = alarm_snooze_until;
+        struct tm tm;
+        localtime_r(&u, &tm);
+        fmt12(t, sizeof t, tm.tm_hour, tm.tm_min);
+        snprintf(b, n, "snoozed until %s", t);
+    } else if (settings.alarm_on) {
+        fmt12(t, sizeof t, settings.alarm_min / 60, settings.alarm_min % 60);
+        snprintf(b, n, "alarm %s", t);
+    } else {
+        snprintf(b, n, "alarm off");
+    }
+}
+
 static void draw_footer(void)
 {
-    char b[64];
+    char b[96], al[48];
+    alarm_text(al, sizeof al);
     int64_t now = esp_timer_get_time() / 1000000;
     xSemaphoreTake(wx_lock, portMAX_DELAY);
     int ver = wx_ver;
     int64_t age = now - wx.stamp_s;
     xSemaphoreGive(wx_lock);
-    if (!ver) snprintf(b, sizeof b, "weather not loaded yet \267 %s", ip_str);
-    else if (age < 60) snprintf(b, sizeof b, "weather updated just now \267 %s", ip_str);
-    else snprintf(b, sizeof b, "weather updated %d min ago \267 %s", (int)(age / 60), ip_str);
+    if (!ver) snprintf(b, sizeof b, "weather not loaded yet \267 %s \267 %s", ip_str, al);
+    else if (age < 60) snprintf(b, sizeof b, "weather updated just now \267 %s \267 %s", ip_str, al);
+    else snprintf(b, sizeof b, "weather updated %d min ago \267 %s \267 %s", (int)(age / 60), ip_str, al);
     region_begin(LCD_W, FOOT_H);
     draw_text_c(&sc, &f_lbl, LCD_W / 2, 13, b, P.foot);
     region_end(0, FOOT_Y);
@@ -607,6 +656,196 @@ static void draw_portal(void)
     if (second) centred_line(304, &f_date, P.cond, second);
 }
 
+// ---------------------------------------------------------------------------
+// Alarm screens. The fonts are small, so these draw their text magnified by an integer factor.
+// ---------------------------------------------------------------------------
+static int draw_text_k(surf_t *s, const font_t *f, int x, int base, const char *str, uint16_t c, int k)
+{
+    for (const unsigned char *p = (const unsigned char *)str; *p; p++) {
+        if (*p < 32) continue;
+        const glyph_t *g = &f->g[*p - 32];
+        const uint8_t *a = f->alpha + g->off;
+        for (int j = 0; j < g->h * k; j++) {
+            int py = base + g->yo * k + j;
+            if (py < 0 || py >= s->h) continue;
+            for (int i = 0; i < g->w * k; i++) {
+                int px = x + g->xo * k + i;
+                if (px < 0 || px >= s->w) continue;
+                blend(&s->px[py * s->w + px], c, a[(j / k) * g->w + i / k]);
+            }
+        }
+        x += g->adv * k;
+    }
+    return x;
+}
+
+static void draw_text_kc(surf_t *s, const font_t *f, int cx, int base, const char *str, uint16_t c, int k)
+{
+    draw_text_k(s, f, cx - text_w(f, str) * k / 2, base, str, c, k);
+}
+
+// Ringing: shown over everything while the alarm sounds. Day colors at full brightness.
+static void draw_ring(const struct tm *tm, bool blink)
+{
+    char t[16], ap[3], hint[48];
+    snprintf(t, sizeof t, "%d:%02d", tm->tm_hour % 12 ? tm->tm_hour % 12 : 12, tm->tm_min);
+    snprintf(ap, sizeof ap, "%s", tm->tm_hour < 12 ? "AM" : "PM");
+    region_begin(LCD_W, 56);
+    draw_text_kc(&sc, &f_val, LCD_W / 2, 46, "ALARM", blink ? P.sec : P.text, 2);
+    region_end(0, 16);
+    int tw = text_w(&f_val, t) * 3, aw = text_w(&f_val, ap) * 2, x = (LCD_W - (tw + 14 + aw)) / 2;
+    region_begin(LCD_W, 70);
+    draw_text_k(&sc, &f_val, x, 66, t, P.text, 3);
+    draw_text_k(&sc, &f_val, x + tw + 14, 66, ap, P.date, 2);
+    region_end(0, 100);
+    snprintf(hint, sizeof hint, "Tap the screen to snooze %d minutes", ALARM_SNOOZE_MIN);
+    region_begin(LCD_W, 28);
+    draw_text_c(&sc, &f_val, LCD_W / 2, 22, hint, P.cond);
+    region_end(0, 202);
+    region_begin(LCD_W, 28);
+    draw_text_c(&sc, &f_val, LCD_W / 2, 22, "Double-press BOOT to stop it", P.cond);
+    region_end(0, 242);
+}
+
+// Setting screen, opened by holding the BOOT button: hour, minute and AM/PM columns with up and down
+// buttons, an ON/OFF button and DONE. Hit areas are in screen coordinates.
+static const int SET_COLX[3] = { 110, 240, 370 };
+#define SET_COLW 112
+#define SET_UP_Y 46
+#define SET_VAL_Y 104
+#define SET_DN_Y 178
+#define SET_BTN_H 54
+#define SET_BOT_Y 250
+#define SET_BOT_H 56
+#define SET_IDLE_MS (60 * 1000)               // untouched this long: leave without saving
+#define SET_REPEAT_FIRST_MS 500
+#define SET_REPEAT_MS 120
+
+static int set_min, set_rep;
+static bool set_on;
+static uint32_t set_seq;
+static int64_t set_idle_ms, set_rep_ms;
+
+static void set_chevron(surf_t *s, int cx, int cy, bool up, uint16_t c)
+{
+    float d = up ? -1 : 1;
+    aa_line(s, cx - 18, cy - d * 7, cx, cy + d * 7, 5, c);
+    aa_line(s, cx + 18, cy - d * 7, cx, cy + d * 7, 5, c);
+}
+
+static void set_draw_arrows(int y, bool up)
+{
+    region_begin(LCD_W, SET_BTN_H);
+    for (int c = 0; c < 3; c++) {
+        int x = SET_COLX[c] - 48;
+        rrect(&sc, x, 0, 96, SET_BTN_H, 12, P.tedge);
+        rrect(&sc, x + 1, 1, 94, SET_BTN_H - 2, 11, P.tbg);
+        set_chevron(&sc, SET_COLX[c], SET_BTN_H / 2, up, P.text);
+    }
+    region_end(0, y);
+}
+
+static void set_draw_values(void)
+{
+    int h = set_min / 60, m = set_min % 60;
+    char hs[4], ms[4];
+    snprintf(hs, sizeof hs, "%d", h % 12 ? h % 12 : 12);
+    snprintf(ms, sizeof ms, "%02d", m);
+    uint16_t c = set_on ? P.text : P.label;
+    region_begin(LCD_W, 70);
+    draw_text_kc(&sc, &f_val, SET_COLX[0], 66, hs, c, 3);
+    draw_text_kc(&sc, &f_val, (SET_COLX[0] + SET_COLX[1]) / 2, 62, ":", c, 3);
+    draw_text_kc(&sc, &f_val, SET_COLX[1], 66, ms, c, 3);
+    draw_text_kc(&sc, &f_val, SET_COLX[2], 52, h < 12 ? "AM" : "PM", c, 2);
+    region_end(0, SET_VAL_Y);
+}
+
+static void set_draw_bottom(void)
+{
+    region_begin(LCD_W, SET_BOT_H);
+    rrect(&sc, 40, 0, 180, SET_BOT_H, 12, set_on ? P.sec : P.tedge);
+    if (!set_on) rrect(&sc, 41, 1, 178, SET_BOT_H - 2, 11, P.tbg);
+    draw_text_kc(&sc, &f_val, 130, 37, set_on ? "ALARM ON" : "ALARM OFF", set_on ? P.bg : P.text, 1);
+    rrect(&sc, 260, 0, 180, SET_BOT_H, 12, P.tedge);
+    rrect(&sc, 261, 1, 178, SET_BOT_H - 2, 11, P.tbg);
+    draw_text_kc(&sc, &f_val, 350, 37, "DONE", P.text, 1);
+    region_end(0, SET_BOT_Y);
+}
+
+static void set_open(int64_t now_ms)
+{
+    set_min = settings.alarm_min;
+    set_on = settings.alarm_on;
+    set_seq = t_seq;
+    set_idle_ms = now_ms;
+    set_rep = -1;
+    ui_mode = UI_SET;
+    push(0, 0, LCD_W, LCD_H, NULL, P.bg);
+    region_begin(LCD_W, 40);
+    draw_text_kc(&sc, &f_val, LCD_W / 2, 30, "Set the alarm", P.loc, 1);
+    region_end(0, 0);
+    set_draw_arrows(SET_UP_Y, true);
+    set_draw_values();
+    set_draw_arrows(SET_DN_Y, false);
+    set_draw_bottom();
+}
+
+static int set_hit(int x, int y)
+{
+    for (int c = 0; c < 3; c++)
+        if (abs(x - SET_COLX[c]) < SET_COLW / 2) {
+            if (y >= SET_UP_Y - 6 && y < SET_UP_Y + SET_BTN_H + 6) return 10 + c;
+            if (y >= SET_DN_Y - 6 && y < SET_DN_Y + SET_BTN_H + 6) return 20 + c;
+        }
+    if (y >= SET_BOT_Y - 6 && y < SET_BOT_Y + SET_BOT_H + 6) return x < LCD_W / 2 ? 30 : 31;
+    return -1;
+}
+
+static void set_apply(int code)               // 10+c: up, 20+c: down (c = 0 hour, 1 minute, 2 AM/PM), 30: ON/OFF
+{
+    if (code == 30) { set_on = !set_on; set_draw_values(); set_draw_bottom(); return; }
+    int h = set_min / 60, m = set_min % 60, d = code < 20 ? 1 : -1;
+    switch (code % 10) {
+    case 0: h = (h / 12) * 12 + (h % 12 + d + 12) % 12; break;     // 12 -> 1 -> ... -> 11 -> 12, AM/PM unchanged
+    case 1: m = (m + d + 60) % 60; break;
+    default: h = (h + 12) % 24; break;
+    }
+    set_min = h * 60 + m;
+    if (!set_on) { set_on = true; set_draw_bottom(); }     // setting a time means you want the alarm
+    set_draw_values();
+}
+
+// One pass over the touch state; true when the screen should close.
+static bool set_step(int64_t now_ms)
+{
+    if (t_seq != set_seq) {                   // a new touch
+        set_seq = t_seq;
+        set_idle_ms = now_ms;
+        int code = set_hit(t_x, t_y);
+        set_rep = -1;
+        if (code == 31) {
+            settings.alarm_on = set_on;
+            settings.alarm_min = set_min;
+            save_settings();
+            alarm_changed();
+            ESP_LOGI(TAG, "alarm %s at %02d:%02d", set_on ? "on" : "off", set_min / 60, set_min % 60);
+            return true;
+        }
+        if (code >= 0) {
+            set_apply(code);
+            if (code < 30 && code % 10 < 2) { set_rep = code; set_rep_ms = now_ms + SET_REPEAT_FIRST_MS; }
+        }
+    } else if (set_rep >= 0) {                // held on an hour or minute button: repeat
+        if (!t_down) set_rep = -1;
+        else if (now_ms >= set_rep_ms) {
+            set_idle_ms = now_ms;
+            set_apply(set_rep);
+            set_rep_ms = now_ms + SET_REPEAT_MS;
+        }
+    }
+    return now_ms - set_idle_ms >= SET_IDLE_MS;
+}
+
 static void ui_task(void *arg)
 {
     face_bg = malloc(DIAL * DIAL * 2);
@@ -614,7 +853,7 @@ static void ui_task(void *arg)
     scratch = malloc(LCD_W * SCRATCH_H * 2);
     assert(face_bg && dial_buf && scratch);
 
-    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0, last_sv = 0, last_pv = -1, cur_bl = -1;
+    int cur_night = -1, last_state = -1, last_sec = -1, last_min = -1, last_yday = -1, last_wxv = 0, last_sv = 0, last_pv = -1, cur_bl = -1, last_av = -1, ring_half = -1;
     bool in_portal = false;
     bool was_synced = false;
     while (1) {
@@ -640,7 +879,28 @@ static void ui_task(void *arg)
             last_pv = -1;                                // and a repaint of the setup screen
             ESP_LOGI(TAG, "touch: display rotated %s", rot ? "180" : "back to normal");
         }
+        if (alarm_state == ALARM_RINGING) {              // the alarm sounds: its screen goes over everything
+            if (ui_mode != UI_RING) {
+                ui_mode = UI_RING;
+                ring_half = -1;
+                set_palette(0);
+                backlight_set(100, 0);
+                cur_bl = 100;
+                push(0, 0, LCD_W, LCD_H, NULL, P.bg);
+            }
+            int half = (int)(tv.tv_sec * 2 + tv.tv_usec / 500000);
+            if (half != ring_half) { ring_half = half; draw_ring(&tm, half & 1); }
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        if (ui_mode == UI_RING) {                        // the alarm ended: repaint whatever was underneath
+            ui_mode = UI_CLOCK;
+            cur_night = -1;
+            cur_bl = -1;
+            last_pv = -1;
+        }
         if (portal_active) {                             // the setup page is open: show its screen instead
+            alarm_ui_request = 0;
             if (!in_portal) { in_portal = true; set_palette(0); last_pv = -1; backlight_set(100, 0); cur_bl = 100; }
             if (portal_version != last_pv) { last_pv = portal_version; draw_portal(); }
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -650,6 +910,15 @@ static void ui_task(void *arg)
         // The backlight follows the room too: dim at night, and also until the camera's first reading.
         int want_bl = (night || ambient_state == AMBIENT_UNKNOWN) ? NIGHT_BACKLIGHT_PCT : 100;
         if (want_bl != cur_bl) { cur_bl = want_bl; backlight_set(want_bl, BL_FADE_MS); }
+        if (ui_mode == UI_CLOCK && alarm_ui_request) {   // BOOT held: the alarm setting screen
+            alarm_ui_request = 0;
+            set_open(esp_timer_get_time() / 1000);
+        }
+        if (ui_mode == UI_SET) {
+            if (set_step(esp_timer_get_time() / 1000)) { ui_mode = UI_CLOCK; cur_night = -1; }
+            vTaskDelay(pdMS_TO_TICKS(30));
+            continue;
+        }
         if (night != cur_night) {                        // palette changed: repaint everything
             cur_night = night;
             set_palette(night);
@@ -675,6 +944,7 @@ static void ui_task(void *arg)
             draw_weather();
             last_min = -1;                               // refresh footer too
         }
+        if (alarm_version != last_av) { last_av = alarm_version; last_min = -1; draw_header(); }     // footer shows the alarm
         if (tm.tm_min != last_min) {
             last_min = tm.tm_min;
             draw_footer();
@@ -730,23 +1000,41 @@ static void touch_task(void *arg)
     i2c_master_dev_handle_t dev;
     ESP_ERROR_CHECK(i2c_master_bus_add_device(i2c_bus, &dc, &dev));
 
-    bool was_down = false, flipped_at_press = false, hold_done = false;
+    bool was_down = false, flipped_at_press = false, hold_done = false, hold_ok = false;
     int64_t last_flip_ms = -FLIP_LOCKOUT_MS, down_since_ms = 0;
     while (1) {
-        uint8_t reg = 0x02, n = 0;                       // register 2 = number of touch points
-        if (i2c_master_transmit_receive(dev, &reg, 1, &n, 1, 100) == ESP_OK) {
+        uint8_t reg = 0x02, b[5] = { 0 };                // register 2 = number of touch points, then x and y
+        if (i2c_master_transmit_receive(dev, &reg, 1, b, sizeof b, 100) == ESP_OK) {
+            uint8_t n = b[0];
             bool down = (n & 0x0F) > 0 && (n & 0x0F) < 3;
             int64_t now_ms = esp_timer_get_time() / 1000;
+            if (down) {                                  // portrait controller -> landscape screen (as in the launcher)
+                int rx = ((b[1] & 0x0F) << 8) | b[2], ry = ((b[3] & 0x0F) << 8) | b[4];
+                int sx = ry, sy = LCD_H - 1 - rx;
+                if (rx > 3000 || ry > 3000) sx = sy = -1;      // the chip reports 4095,4095 for a phantom point
+                else if (rot) { sx = LCD_W - 1 - sx; sy = LCD_H - 1 - sy; }
+                t_x = sx;
+                t_y = sy;
+            }
+            t_down = down;
             if (down && !was_down) {
+                t_seq++;
                 down_since_ms = now_ms;
                 hold_done = false;
-                flipped_at_press = now_ms - last_flip_ms >= FLIP_LOCKOUT_MS;
-                if (flipped_at_press) {
-                    flip_req = true;
-                    last_flip_ms = now_ms;
+                flipped_at_press = false;
+                hold_ok = false;
+                if (alarm_state == ALARM_RINGING) {
+                    alarm_snooze();                      // a tap silences the alarm for a while
+                } else if (ui_mode == UI_CLOCK) {        // clock screen: a touch flips the display, a long one opens setup
+                    hold_ok = true;
+                    flipped_at_press = now_ms - last_flip_ms >= FLIP_LOCKOUT_MS;
+                    if (flipped_at_press) {
+                        flip_req = true;
+                        last_flip_ms = now_ms;
+                    }
                 }
             }
-            if (down && !hold_done && now_ms - down_since_ms >= HOLD_MS) {
+            if (down && hold_ok && !hold_done && now_ms - down_since_ms >= HOLD_MS) {
                 hold_done = true;
                 if (flipped_at_press) flip_req = true;     // undo the flip this touch started
                 ESP_LOGI(TAG, "touch held: opening the setup page");
@@ -874,6 +1162,7 @@ void app_main(void)
     xTaskCreate(ui_task, "ui", 8192, NULL, 5, NULL);
     xTaskCreate(touch_task, "touch", 4096, NULL, 4, NULL);
     ambient_start(i2c_bus);                              // the camera as a light sensor (palette: dark in a dark room)
+    alarm_start(i2c_bus);                                // alarm clock: speaker, BOOT button
 
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) {

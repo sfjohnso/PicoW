@@ -9,6 +9,8 @@ typedef struct {
     char pending[96];     // a street address typed on the setup page, not looked up yet ("" if none)
     bool configured;      // Wi-Fi settings exist (stored, or compiled in)
     bool tz_needed;       // stored settings carry no time zone: take it from the weather reply
+    bool alarm_on;        // the daily alarm is armed
+    int alarm_min;        // alarm time, minutes after local midnight (0..1439)
 } settings_t;
 
 extern settings_t settings;

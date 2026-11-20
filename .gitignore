@@ -271,6 +271,8 @@
 !Documents/Projects/ESP32-P4/p4clock/main/portal.h
 !Documents/Projects/ESP32-P4/p4clock/main/ambient.c
 !Documents/Projects/ESP32-P4/p4clock/main/ambient.h
+!Documents/Projects/ESP32-P4/p4clock/main/alarm.c
+!Documents/Projects/ESP32-P4/p4clock/main/alarm.h
 !Documents/Projects/ESP32-P4/p4clock/main/tz_table.h
 !Documents/Projects/ESP32-P4/p4clock/tools/gen_tz_table.py
 

@@ -44,6 +44,8 @@ void load_settings(void)
     settings.pending[0] = 0;
     settings.configured = strcmp(WIFI_SSID, "not-configured") != 0;
     settings.tz_needed = false;
+    settings.alarm_on = false;
+    settings.alarm_min = 7 * 60;
 
     const esp_partition_t *p = config_partition();
     if (!p) return;
@@ -64,6 +66,12 @@ void load_settings(void)
     if (cJSON_IsString(ssid) && ssid->valuestring[0]) settings.configured = true;
     cJSON *tz = cJSON_GetObjectItem(json, "tz");
     settings.tz_needed = settings.configured && !(cJSON_IsString(tz) && tz->valuestring[0]);
+    cJSON *al = cJSON_GetObjectItem(json, "alarm");                // "HH:MM"
+    int ah, am;
+    if (cJSON_IsString(al) && sscanf(al->valuestring, "%d:%d", &ah, &am) == 2 && ah >= 0 && ah < 24 && am >= 0 && am < 60)
+        settings.alarm_min = ah * 60 + am;
+    cJSON *aon = cJSON_GetObjectItem(json, "alarm_on");
+    if (cJSON_IsBool(aon)) settings.alarm_on = cJSON_IsTrue(aon);
     cJSON_Delete(json);
     ESP_LOGI(TAG, "settings from the config partition: network '%s', place '%s'%s%s", settings.ssid, settings.label,
              settings.pending[0] ? ", address still to look up" : "", settings.tz_needed ? ", time zone to look up" : "");
@@ -81,6 +89,10 @@ bool save_settings(void)
     cJSON_AddStringToObject(json, "lon", settings.lon);
     cJSON_AddStringToObject(json, "tz", settings.tz_needed ? "" : settings.tz);
     if (settings.pending[0]) cJSON_AddStringToObject(json, "pending", settings.pending);
+    char alarm[16];
+    snprintf(alarm, sizeof alarm, "%02d:%02d", settings.alarm_min / 60, settings.alarm_min % 60);
+    cJSON_AddStringToObject(json, "alarm", alarm);
+    cJSON_AddBoolToObject(json, "alarm_on", settings.alarm_on);
     char *text = cJSON_PrintUnformatted(json);
     cJSON_Delete(json);
     if (!text) return false;
@@ -285,30 +297,60 @@ static bool zip5(const char *text, char out[6])
     return true;
 }
 
-// A street address (U.S. Census), else a place name or postal code (Open-Meteo), whole or in pieces.
+// A U.S. ZIP code at the very end of an address ("123 Main St, Springfield, IL 62701" or "... 62701-1234"): the five digits.
+static bool trailing_zip(const char *text, char out[6])
+{
+    size_t n = strlen(text);
+    while (n && text[n - 1] == ' ') n--;
+    size_t start;
+    if (n >= 10 && text[n - 5] == '-' && strspn(text + n - 4, "0123456789") == 4 &&
+        strspn(text + n - 10, "0123456789") >= 5) start = n - 10;     // 12345-6789
+    else if (n >= 5 && strspn(text + n - 5, "0123456789") == 5) start = n - 5;
+    else return false;
+    if (start > 0 && text[start - 1] >= '0' && text[start - 1] <= '9') return false;   // part of a longer number
+    memcpy(out, text + start, 5);
+    out[5] = 0;
+    return true;
+}
+
+// Looks a place up in this order (the Windows installer does the same):
+//   1. a bare U.S. ZIP code, as a U.S. ZIP (91320 is Newbury Park, California, not a town in France)
+//   2. a street address (U.S. Census)
+//   3. a U.S. ZIP code at the end of the text (an address the Census does not know still has its ZIP)
+//   4. a place name or postal code anywhere (Open-Meteo), as typed
+//   5. each comma-separated piece on its own, ZIP codes first ("Newbury Park, 91320")
+// Returns 1 found, 0 not found, -1 network trouble.
 int resolve_address(const char *text)
 {
-    int r = census_lookup(text);
-    if (r != 0) return r;                                 // found, or network trouble
     char zip[6];
-    if (zip5(text, zip)) {                                // a bare ZIP: the U.S. one first (91320 is Newbury Park,
-        r = place_search(zip, "US");                      // California, not a town in France)
+    int r;
+    if (zip5(text, zip)) {
+        r = place_search(zip, "US");
+        if (r != 0) return r;                             // found, or network trouble
+    }
+    r = census_lookup(text);
+    if (r != 0) return r;
+    if (trailing_zip(text, zip)) {
+        r = place_search(zip, "US");
         if (r != 0) return r;
     }
     r = place_search(text, NULL);
     if (r != 0) return r;
-    char copy[96];                                        // "Newbury Park, 91320": try each piece alone
-    strlcpy(copy, text, sizeof copy);
-    char *save = NULL;
-    for (char *t = strtok_r(copy, ",", &save); t; t = strtok_r(NULL, ",", &save)) {
-        while (*t == ' ') t++;
-        size_t n = strlen(t);
-        while (n && t[n - 1] == ' ') t[--n] = 0;
-        if (!n) continue;
-        char piece_zip[6];
-        bool is_zip = zip5(t, piece_zip);                          // a ZIP piece is a U.S. one
-        r = place_search(is_zip ? piece_zip : t, is_zip ? "US" : NULL);
-        if (r != 0) return r;
+    for (int zip_pieces = 1; zip_pieces >= 0; zip_pieces--) {     // first the ZIP pieces, then the others
+        char copy[96];
+        strlcpy(copy, text, sizeof copy);
+        char *save = NULL;
+        for (char *t = strtok_r(copy, ",", &save); t; t = strtok_r(NULL, ",", &save)) {
+            while (*t == ' ') t++;
+            size_t n = strlen(t);
+            while (n && t[n - 1] == ' ') t[--n] = 0;
+            if (!n) continue;
+            char piece_zip[6];
+            bool is_zip = zip5(t, piece_zip);                      // a ZIP piece is a U.S. one
+            if (is_zip != (bool)zip_pieces) continue;
+            r = place_search(is_zip ? piece_zip : t, is_zip ? "US" : NULL);
+            if (r != 0) return r;
+        }
     }
     return 0;
 }
