@@ -7,7 +7,7 @@
 //
 // Decoding: JPEG with esp_jpeg (TJpgDec, decodes at 1/1, 1/2, 1/4 or 1/8 size), PNG with libpng row by row. Both feed
 // a box-filter accumulator the size of the final picture, so memory stays small however large the photo is.
-// Not supported (shown as a message): progressive JPEG, interlaced PNG.
+// Progressive JPEG goes through lowzag (reduced-scale, low memory). Not supported (shown as a message): interlaced PNG.
 //
 // Display: ST7796 480x320 on SPI (MOSI20 SCLK21 CS23 DC26 RST27 BL28).  Touch: FT6336 at I2C 0x38 (SDA7 SCL8 RST29).
 // SD card: SDMMC slot 0, 4-bit, CLK43 CMD44 D0-3 39-42, supplied by on-chip LDO4.
@@ -32,6 +32,7 @@
 #include "freertos/task.h"
 #include "driver/jpeg_decode.h"
 #include "jpeg_decoder.h"
+#include "lowzag.h"
 #include "png.h"
 #include "sd_pwr_ctrl_by_on_chip_ldo.h"
 #include "sdmmc_cmd.h"
@@ -461,6 +462,58 @@ static bool show_jpeg_hw(const uint8_t *in, size_t size, int w, int h, int orien
     return true;
 }
 
+// RGB888 pixels (w x h: the whole picture, or a reduced-size decode of an orig_w x orig_h one) -> the screen, scaled to fit.
+static bool draw_rgb888(const uint8_t *px, int orig_w, int orig_h, int w, int h, int orient)
+{
+    if (!acc_begin(orig_w, orig_h, w, h, orient)) return false;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++, px += 3) acc_add(x, y, px[0], px[1], px[2]);
+    acc_present();
+    return true;
+}
+
+// Progressive JPEG: neither the hardware decoder nor TJpgDec can do it, so lowzag (MIT, a registry component) does.
+// It decodes at 1/1, 1/2, 1/4 or 1/8 and keeps only the low-frequency corner of each block, which is all a reduced
+// IDCT reads: a 12 MP photo needs about 3.6 MB at 1/8 instead of the 36 MB of coefficients a general decoder holds.
+// Memory still follows the source size, so it is capped; over the cap it gives up chroma detail, then a scale step.
+#define PROGRESSIVE_MEM_LIMIT (16 * 1024 * 1024)
+
+static const char *show_jpeg_progressive(const uint8_t *in, size_t size, const char *path)
+{
+    int w, h;
+    lowzag_err_t e = lowzag_probe(in, size, &w, &h);
+    if (e == LOWZAG_ERR_NOT_PROGRESSIVE || e == LOWZAG_ERR_UNSUPPORTED) return "JPEG type not supported";
+    if (e != LOWZAG_OK) return "not a valid JPEG";
+    int orient = jpeg_orientation(in, size);
+    bool swap = orient >= 5;
+    int fw, fh;
+    fit(swap ? h : w, swap ? w : h, &fw, &fh);
+    lowzag_cfg_t cfg = LOWZAG_CFG_INIT;
+    cfg.target_w = swap ? fh : fw;                      // the decoder's output grid is the stored, unrotated picture
+    cfg.target_h = swap ? fw : fh;
+    cfg.mem_limit = PROGRESSIVE_MEM_LIMIT;
+    lowzag_info_t info = LOWZAG_INFO_INIT;
+    e = lowzag_decode_mem(&cfg, in, size, NULL, 0, &info);              // size query: picks the scale, allocates nothing
+    if (e != LOWZAG_ERR_BUFFER_TOO_SMALL) return e == LOWZAG_ERR_NOMEM ? "too large for memory" : "progressive JPEG not supported";
+    size_t out_len = (size_t)info.out_w * info.out_h * 3;
+    uint8_t *out = heap_caps_malloc(out_len, MALLOC_CAP_SPIRAM);
+    if (!out) return "out of memory";
+    int64_t t0 = esp_timer_get_time();
+    e = lowzag_decode_mem(&cfg, in, size, out, out_len, &info);
+    int64_t t1 = esp_timer_get_time();
+    if (e != LOWZAG_OK) {
+        heap_caps_free(out);
+        return e == LOWZAG_ERR_NOMEM ? "too large for memory" : "progressive JPEG decode failed";
+    }
+    bool ok = draw_rgb888(out, w, h, info.out_w, info.out_h, orient);
+    heap_caps_free(out);
+    if (!ok) return "out of memory";
+    ESP_LOGI(TAG, "%s: %dx%d orient %d, PROGRESSIVE decode 1/%d in %lld ms (peak %u KB), scaled+drawn in %lld ms -> %dx%d", path, w, h,
+             orient, info.scale, (long long)((t1 - t0) / 1000), (unsigned)(info.peak_alloc / 1024),
+             (long long)((esp_timer_get_time() - t1) / 1000), X.fw, X.fh);
+    return NULL;
+}
+
 static const char *show_jpeg(const char *path)
 {
     FILE *f = fopen(path, "rb");
@@ -479,7 +532,11 @@ static const char *show_jpeg(const char *path)
 
     esp_jpeg_image_cfg_t cfg = { .indata = in, .indata_size = size, .out_format = JPEG_IMAGE_FORMAT_RGB888, .out_scale = JPEG_IMAGE_SCALE_0 };
     esp_jpeg_image_output_t info;
-    if (esp_jpeg_get_image_info(&cfg, &info) != ESP_OK) { heap_caps_free(in); return "not a baseline JPEG (progressive?)"; }
+    if (esp_jpeg_get_image_info(&cfg, &info) != ESP_OK) {               // not baseline: try progressive
+        const char *err = show_jpeg_progressive(in, size, path);
+        heap_caps_free(in);
+        return err;
+    }
     int w = info.width, h = info.height;
     int orient = jpeg_orientation(in, size);
 
@@ -505,12 +562,9 @@ static const char *show_jpeg(const char *path)
     if (r != ESP_OK) { heap_caps_free(out); return "JPEG decode failed"; }
     int64_t t1 = esp_timer_get_time();
 
-    if (!acc_begin(w, h, info.width, info.height, orient)) { heap_caps_free(out); return "out of memory"; }
-    const uint8_t *p = out;
-    for (int y = 0; y < info.height; y++)
-        for (int x = 0; x < info.width; x++, p += 3) acc_add(x, y, p[0], p[1], p[2]);
+    bool drawn = draw_rgb888(out, w, h, info.width, info.height, orient);
     heap_caps_free(out);
-    acc_present();
+    if (!drawn) return "out of memory";
     ESP_LOGI(TAG, "%s: %dx%d orient %d, software decode 1/%d in %lld ms, scaled+drawn in %lld ms -> %dx%d", path, w, h, orient, 1 << k,
              (long long)((t1 - t0) / 1000), (long long)((esp_timer_get_time() - t1) / 1000), X.fw, X.fh);
     return NULL;
