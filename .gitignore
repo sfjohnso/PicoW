@@ -331,3 +331,7 @@
 !Documents/Projects/ESP32-P4/music/main/font_8x16.c
 !Documents/Projects/ESP32-P4/music/main/font_8x16.h
 !Documents/Projects/ESP32-P4/music/main/minimp3.h
+
+# --- third-party licence text for the converted Terminus font (OFL) ---
+!Documents/Projects/ESP32-P4/third_party/
+!Documents/Projects/ESP32-P4/third_party/OFL-Terminus.txt
