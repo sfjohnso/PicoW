@@ -61,9 +61,11 @@ details (board ports, per-project state) live in the memory store, not here.
 - The home directory `C:\Users\Steve` **is the repo root and contains secrets.**
   **Never bulk-add** (`git add -A`/`git add .`). The whitelist `.gitignore` is the
   backstop; track a new file with an explicit `!path` entry.
-- Commit and push **only when asked.** One logical change per commit. The commit
-  message describes **what shipped**, not the path you took to get there. End commit
-  messages with the `Co-Authored-By: Claude ...` trailer.
+- After substantial changes, **ask whether to commit** — don't assume, but don't
+  leave the working tree littered either. Never push without being asked. One
+  logical change per commit. The commit message describes **what shipped**, not
+  the path you took to get there. End commit messages with the
+  `Co-Authored-By: Claude ...` trailer.
 
 ## Don't touch / confirm first
 
