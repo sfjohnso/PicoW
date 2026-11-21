@@ -335,3 +335,14 @@
 # --- third-party licence text for the converted Terminus font (OFL) ---
 !Documents/Projects/ESP32-P4/third_party/
 !Documents/Projects/ESP32-P4/third_party/OFL-Terminus.txt
+
+# --- P4 sound meter app (Documents/Projects/ESP32-P4/sound): source only. NOT build/, sdkconfig ---
+!Documents/Projects/ESP32-P4/sound/
+!Documents/Projects/ESP32-P4/sound/CMakeLists.txt
+!Documents/Projects/ESP32-P4/sound/partitions.csv
+!Documents/Projects/ESP32-P4/sound/sdkconfig.defaults
+!Documents/Projects/ESP32-P4/sound/main/
+!Documents/Projects/ESP32-P4/sound/main/CMakeLists.txt
+!Documents/Projects/ESP32-P4/sound/main/main.c
+!Documents/Projects/ESP32-P4/sound/main/font_8x16.c
+!Documents/Projects/ESP32-P4/sound/main/font_8x16.h

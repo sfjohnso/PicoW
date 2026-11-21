@@ -17,7 +17,7 @@ Pop-Location
 Remove-Item Env:P4CLOCK_INSTALLER_BUILD
 
 # 2. The launcher and the apps (their normal build folders; configured once with set-target esp32p4).
-foreach ($name in 'launcher', 'photos', 'music', 'life', 'quake') {
+foreach ($name in 'launcher', 'photos', 'music', 'life', 'sound', 'quake') {
     Push-Location (Join-Path $projects $name)
     idf.py build
     if ($LASTEXITCODE -ne 0) { throw "$name build failed" }
@@ -38,6 +38,7 @@ Copy-Item (Join-Path $projects 'quake\build\quake.bin') "$apps\Quake Demo.bin"
 Copy-Item (Join-Path $projects 'photos\build\photos.bin') "$apps\Photos.bin"
 Copy-Item (Join-Path $projects 'music\build\music.bin') "$apps\Music.bin"
 Copy-Item (Join-Path $projects 'life\build\life.bin') "$apps\Life.bin"
+Copy-Item (Join-Path $projects 'sound\build\sound.bin') "$apps\Sound Meter.bin"
 
 # 4. Safety check: the real Wi-Fi name and password from main\user_config.h must not be in the bundle.
 $py = Join-Path $here '.venv\Scripts\python.exe'

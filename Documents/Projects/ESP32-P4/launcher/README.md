@@ -45,6 +45,7 @@ Do not write `config` (0x187000): it holds the clock's settings. Later launcher-
 * `../photos`    slideshow of `/Photos` (JPEG by the P4 hardware decoder, PNG by libpng)
 * `../music`     album player for `/Music` (minimp3, ES8311 codec)
 * `../life`      Conway's Game of Life: five start modes, cells coloured by born / surviving / just died (no SD files needed)
+* `../sound`     Sound meter: the board's microphone as a VU meter (level, peak hold, 15 s history) or an FFT spectrogram (live spectrum + waterfall)
 
 Each builds like any IDF project (`idf.py set-target esp32p4 && idf.py build`); copy its `build/<name>.bin` to
 `/apps/` on the card. Quake also needs `/id1/PAK0.PAK` (+ `PAK1.PAK`).

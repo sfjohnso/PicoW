@@ -3,7 +3,7 @@
 A five-step window:
 
   1. Connect the board over USB and flash the launcher and the clock, plus the clock's settings.
-  2. Put the board's microSD card in this PC; the installer adds the apps (Quake Demo, Photos, Music, Life) and
+  2. Put the board's microSD card in this PC; the installer adds the apps (Quake Demo, Photos, Music, Life, Sound Meter) and
      creates the id1, Music and Photos folders. The Quake .pak files come from the user's own copy of Quake.
   3. The user adds music and photos.
   4. Eject the card.
@@ -748,7 +748,7 @@ def run_gui():
     verify_btn = ttk.Button(f, text="Restart the board and test")
     verify_btn.pack(fill="x", pady=(6, 4), ipady=3)
     ttk.Label(f, text="After it passes, try the apps yourself: restart the board and touch the screen within 3 "
-                      "seconds to keep the menu, then tap Photos, Music, Life or Quake Demo and Launch. The Reset button "
+                      "seconds to keep the menu, then tap Photos, Music, Life, Sound Meter or Quake Demo and Launch. The Reset button "
                       "always brings you back to the menu.", foreground="#555", wraplength=560,
               justify="left").pack(anchor="w", pady=4)
 
